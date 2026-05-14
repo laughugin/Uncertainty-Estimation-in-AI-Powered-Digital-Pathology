@@ -1,0 +1,343 @@
+{% extends "base.html" %}
+{% block title %}Run — Uncertainty in Digital Pathology{% endblock %}
+{% block content %}
+<h1>Run</h1>
+<p class="page-subtitle">
+  Configure and execute reproducible training runs with live monitoring. Model and dataset are documented in
+  <a href="{{ url_for('project') }}#references">References</a>. Each run writes checkpoints and a metrics summary.
+</p>
+
+<section class="section">
+  <div class="section-num">0. Experimental intent</div>
+  <div class="card">
+    <div class="info-box">
+      <p><strong>Purpose</strong>: produce traceable checkpoints for uncertainty evaluation and thesis reporting.</p>
+      <ul>
+        <li><strong>Output artifacts</strong>: `best.pt`, `last.pt`, and `metrics.json` under `checkpoints/run_*`.</li>
+        <li><strong>Reproducibility</strong>: keep model, subset size, epochs, LR, and batch size consistent with reported results.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-num">1. Train model (live log)</div>
+  <div class="card" style="border-left:4px solid var(--accent);">
+    <p>
+      <strong>Model:</strong> Vision Transformer (ViT-B/16, 224×224).
+      <strong>Dataset:</strong> Select the dataset and sample limits below.
+      Each run is saved under <code>checkpoints/run_&lt;timestamp&gt;/</code> with <code>best.pt</code> and <code>metrics.json</code>.
+      For citations, see the <a href="{{ url_for('project') }}">Project</a> page and the canonical files in <code>references/</code>.
+    </p>
+    <div class="form-row" style="flex-wrap:wrap;gap:1rem;margin-bottom:1rem;">
+      <div class="form-group">
+        <label for="train-model-id">Model</label>
+        <select id="train-model-id" title="Backbone model used for training">
+          <option value="google/vit-base-patch16-224">ViT-Base (Patch16-224)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="train-dataset">Dataset</label>
+        <select id="train-dataset" title="Dataset used for training">
+          <option value="pcam">Patch Camelyon (PCAM)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="train-n-train">Train samples</label>
+        <input type="number" id="train-n-train" value="2000" min="100" max="262144" placeholder="2000" title="PCAM train max: 262,144">
+      </div>
+      <div class="form-group">
+        <label for="train-n-val">Val samples</label>
+        <input type="number" id="train-n-val" value="500" min="100" max="32768" placeholder="500" title="PCAM val max: 32,768">
+      </div>
+      <div class="form-group">
+        <label for="train-epochs">Epochs</label>
+        <input type="number" id="train-epochs" value="2" min="1" max="100" style="width:4rem;" title="Recommended quick run: 2; full runs: 5–10">
+      </div>
+      <div class="form-group">
+        <label for="train-lr">Learning rate</label>
+        <input type="text" id="train-lr" value="2e-5" placeholder="2e-5" style="width:6rem;">
+      </div>
+      <div class="form-group">
+        <label for="train-batch">Batch size</label>
+        <input type="number" id="train-batch" value="32" min="1" style="width:4rem;">
+      </div>
+    </div>
+    <p style="margin:0 0 0.5rem;font-size:0.8rem;color:var(--muted);">
+      Recommended quick run: 2 epochs / 2k train / 500 val (~2–5 min on GPU).
+      Medium: 3 epochs / 10k train / 2k val.
+      Full: 5+ epochs / 262k train.
+    </p>
+    <div class="info-box">
+      <p><strong>Guidance</strong>: quick runs verify pipeline; thesis comparisons should use consistent higher-sample settings.</p>
+    </div>
+    <p style="margin:0 0 0.5rem;font-size:0.8rem;"><strong>Device:</strong> <span id="device-info">Loading…</span> <span id="device-note" style="color:var(--muted);"></span></p>
+    <div style="display:flex;gap:0.75rem;flex-wrap:wrap;margin-bottom:0.75rem;">
+      <button class="btn" id="btn-download-pcam" title="Downloads PCAM (train/val/test) to data/raw/">Download PCAM</button>
+      <button class="btn" id="btn-cache-model" title="Downloads and caches the Hugging Face ViT model locally.">Cache model</button>
+    </div>
+    <div class="progress-wrap" aria-label="Training progress">
+      <div class="progress-bar" id="train-progress-bar"></div>
+    </div>
+    <p id="train-progress-text" style="margin:0.35rem 0 0.75rem;font-size:0.8rem;color:var(--muted);">Progress: —</p>
+    <button class="btn btn-primary" id="btn-train">Start training</button>
+    <div class="log-box empty" id="train-log" style="margin-top:0.75rem;">Start training to see the live log output.</div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-num">2. Previous runs</div>
+  <div class="card">
+    <p>Saved runs and their validation accuracy. You can use a run on the <a href="{{ url_for('evaluate_page') }}">Results</a> page.</p>
+    <div class="info-box">
+      <p><strong>Selection rule</strong>: prefer runs with stable validation accuracy and complete logs/metadata.</p>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table" id="runs-table">
+        <thead>
+          <tr>
+            <th>Run</th>
+            <th>Model</th>
+            <th>Dataset</th>
+            <th>Epochs</th>
+            <th>Train N</th>
+            <th>Val N</th>
+            <th>Val acc</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td colspan="7">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<script>
+(function() {
+  fetch('/api/device').then(function(r) { return r.json(); }).then(function(d) {
+    var el = document.getElementById('device-info');
+    var note = document.getElementById('device-note');
+    if (el) {
+      el.textContent = 'Local (runs on this machine). Device: ' + (d.device || '?') + (d.device_name ? ' — ' + d.device_name : '');
+      if (note && d.note) note.textContent = d.note;
+    }
+  }).catch(function() { var el = document.getElementById('device-info'); if (el) el.textContent = 'Local model. Device: ?'; });
+
+  function loadRuns() {
+    fetch('/api/train/runs').then(function(r) { return r.json(); }).then(function(d) {
+      var tbody = document.querySelector('#runs-table tbody');
+      if (!d.runs || d.runs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7">No runs found yet. Start training above to create the first run.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = d.runs.map(function(r) {
+        return '<tr><td class="mono">' + (r.run_id || '—') + '</td><td class="mono">' + (r.model_id || '—') + '</td><td>' + (r.dataset || 'pcam') + '</td><td>' + (r.epochs != null ? r.epochs : '—') + '</td><td>' + (r.n_train != null ? r.n_train.toLocaleString() : '—') + '</td><td>' + (r.n_val != null ? r.n_val.toLocaleString() : '—') + '</td><td>' + (r.best_val_acc != null ? (r.best_val_acc * 100).toFixed(2) + '%' : '—') + '</td></tr>';
+      }).join('');
+    }).catch(function() {
+      document.querySelector('#runs-table tbody').innerHTML = '<tr><td colspan="7">Could not load runs.</td></tr>';
+    });
+  }
+  fetch('/api/models').then(function(r) { return r.json(); }).then(function(d) {
+    var sel = document.getElementById('train-model-id');
+    if (sel && d.models && d.models.length) {
+      sel.innerHTML = d.models.map(function(m) { return '<option value="' + m.id + '">' + m.name + ' — ' + m.id + '</option>'; }).join('');
+      if (d.default) sel.value = d.default;
+    }
+  }).catch(function() {});
+  fetch('/api/datasets').then(function(r) { return r.json(); }).then(function(d) {
+    var sel = document.getElementById('train-dataset');
+    if (sel && d.datasets && d.datasets.length) {
+      var trainable = (d.datasets || []).filter(function(ds) { return ds.can_train === true; });
+      sel.innerHTML = trainable.map(function(ds) { return '<option value="' + ds.id + '">' + ds.name + '</option>'; }).join('');
+      var def = trainable.find(function(ds) { return ds.id === (d.default || 'pcam'); }) || trainable[0];
+      if (def) {
+        var nt = document.getElementById('train-n-train'); if (nt) nt.max = def.max_train || 262144;
+        var nv = document.getElementById('train-n-val'); if (nv) nv.max = def.max_val || 32768;
+      }
+    }
+  }).catch(function() {});
+  loadRuns();
+
+  var trainLog = document.getElementById('train-log');
+  var progressBar = document.getElementById('train-progress-bar');
+  var progressText = document.getElementById('train-progress-text');
+  var es = null;
+  var lastSeq = -1;
+  var epochsTotal = null;
+
+  function setProgress(epoch) {
+    if (!progressBar || !progressText) return;
+    if (!epochsTotal || epochsTotal <= 0) {
+      progressText.textContent = 'Progress: —';
+      progressBar.style.width = '0%';
+      return;
+    }
+    var pct = Math.max(0, Math.min(100, (epoch / epochsTotal) * 100));
+    progressBar.style.width = pct.toFixed(1) + '%';
+    progressText.textContent = 'Progress: epoch ' + epoch + ' / ' + epochsTotal + ' (' + pct.toFixed(1) + '%)';
+  }
+
+  function appendLine(line) {
+    if (!trainLog) return;
+    trainLog.classList.remove('empty', 'error');
+    trainLog.textContent = trainLog.textContent + line + '\n';
+    trainLog.scrollTop = trainLog.scrollHeight;
+  }
+
+  function resetProgress() {
+    if (progressBar) progressBar.style.width = '0%';
+    if (progressText) progressText.textContent = 'Progress: —';
+  }
+
+  function connectStream(fromSeq) {
+    if (es) {
+      try { es.close(); } catch (e) {}
+      es = null;
+    }
+    es = new EventSource('/api/train/stream?from_seq=' + encodeURIComponent(fromSeq));
+    es.onmessage = function(ev) {
+      var payload = null;
+      try { payload = JSON.parse(ev.data); } catch (e) { payload = null; }
+      if (!payload) return;
+
+      if (payload.type === 'log') {
+        lastSeq = payload.seq;
+        appendLine(payload.text);
+
+        // Parse epochs from log lines for progress.
+        var m = payload.text.match(/Epoch\s+(\d+)\s+(?:batch|train_loss)/i);
+        if (m && m[1]) {
+          var epoch = parseInt(m[1], 10);
+          if (!isNaN(epoch)) setProgress(epoch);
+        }
+      }
+
+      if (payload.type === 'done') {
+        appendLine('[Training finished]');
+        if (es) { try { es.close(); } catch (e) {} }
+        es = null;
+        document.getElementById('btn-train').disabled = false;
+        loadRuns();
+        resetProgress();
+      }
+    };
+    es.onerror = function() {
+      if (es) { try { es.close(); } catch (e) {} }
+      es = null;
+      document.getElementById('btn-train').disabled = false;
+    };
+  }
+
+  function loadStatusAndMaybeStream() {
+    resetProgress();
+    if (!trainLog) return;
+    trainLog.textContent = 'Loading training log state…\n';
+
+    fetch('/api/train/status')
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        epochsTotal = d.epochs_total;
+        lastSeq = typeof d.last_seq === 'number' ? d.last_seq : -1;
+        var buf = d.buffer || [];
+        if (buf.length > 0) {
+          trainLog.textContent = buf.map(function(x) { return x.text; }).join('\n') + '\n';
+          // Update progress using the last seen epoch line.
+          var epochFound = null;
+          for (var i = 0; i < buf.length; i++) {
+            var m = buf[i].text.match(/Epoch\s+(\d+)\s+(?:batch|train_loss)/i);
+            if (m && m[1]) epochFound = parseInt(m[1], 10);
+          }
+          if (epochFound != null && !isNaN(epochFound)) setProgress(epochFound);
+        } else {
+          trainLog.textContent = 'Start training to see live output.';
+        }
+
+        // If training is running, connect stream starting after the last buffered seq.
+        if (d.running) {
+          connectStream(lastSeq);
+        } else {
+          if (es) { try { es.close(); } catch (e) {} }
+          es = null;
+          document.getElementById('btn-train').disabled = false;
+        }
+      })
+      .catch(function(e) {
+        trainLog.classList.add('error');
+        trainLog.textContent = 'Error loading training status: ' + e.message + '\n';
+        document.getElementById('btn-train').disabled = false;
+      });
+  }
+
+  function runSetupTask(taskId, label) {
+    var btn = document.querySelector('#' + label);
+    fetch('/api/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task: taskId })
+    }).then(function(r) { return r.json(); }).then(function(d) {
+      appendLine('[' + taskId + '] ' + (d.ok ? 'OK' : 'ERROR'));
+      if (d.log) appendLine(d.log);
+      if (!d.ok) trainLog.classList.add('error');
+    }).catch(function(e) {
+      appendLine('[' + taskId + '] Error: ' + e.message);
+      if (trainLog) trainLog.classList.add('error');
+    });
+  }
+
+  // Setup buttons (minimal UI, but still one-click downloads/caching)
+  var btnDownload = document.getElementById('btn-download-pcam');
+  if (btnDownload) {
+    btnDownload.onclick = function() { this.disabled = true; fetch('/api/run', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({task:'download_pcam'})}).then(r=>r.json()).then(d=>{appendLine('[download_pcam] ' + (d.ok ? 'OK' : 'ERROR')); if (d.log) appendLine(d.log); this.disabled=false; if(!d.ok) trainLog.classList.add('error');}).catch(e=>{appendLine('[download_pcam] Error: '+e.message); this.disabled=false; trainLog.classList.add('error');}); };
+  }
+  var btnCache = document.getElementById('btn-cache-model');
+  if (btnCache) {
+    btnCache.onclick = function() {
+      this.disabled = true;
+      var modelSel = document.getElementById('train-model-id');
+      var modelId = modelSel && modelSel.value ? modelSel.value : 'google/vit-base-patch16-224';
+      fetch('/api/run', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({task:'cache_model', model_id:modelId})})
+        .then(r=>r.json())
+        .then(d=>{appendLine('[cache_model] ' + (d.ok ? 'OK' : 'ERROR')); if (d.log) appendLine(d.log); this.disabled=false; if(!d.ok) trainLog.classList.add('error');})
+        .catch(e=>{appendLine('[cache_model] Error: '+e.message); this.disabled=false; trainLog.classList.add('error');});
+    };
+  }
+
+  document.getElementById('btn-train').onclick = function() {
+    this.disabled = true;
+    resetProgress();
+    if (trainLog) trainLog.textContent = 'Starting training…\n';
+
+    var payload = {};
+    var ds = document.getElementById('train-dataset'); if (ds && ds.value) payload.dataset = ds.value;
+    var m = document.getElementById('train-model-id'); if (m && m.value) payload.model_id = m.value;
+    var e = document.getElementById('train-epochs'); if (e && e.value) payload.epochs = parseInt(e.value, 10);
+    var n = document.getElementById('train-n-train'); if (n && n.value) payload.n_train = parseInt(n.value, 10);
+    var v = document.getElementById('train-n-val'); if (v && v.value) payload.n_val = parseInt(v.value, 10);
+    var lr = document.getElementById('train-lr'); if (lr && lr.value) { var x = parseFloat(lr.value); if (!isNaN(x)) payload.lr = x; }
+    var b = document.getElementById('train-batch'); if (b && b.value) payload.batch_size = parseInt(b.value, 10);
+
+    fetch('/api/train/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }).then(function(r) { return r.json(); }).then(function(d) {
+      if (!d.ok) {
+        appendLine('Error: ' + (d.error || 'Failed'));
+        document.getElementById('btn-train').disabled = false;
+        if (trainLog) trainLog.classList.add('error');
+        return;
+      }
+      loadStatusAndMaybeStream();
+    }).catch(function(e) {
+      appendLine('Error: ' + e.message);
+      document.getElementById('btn-train').disabled = false;
+      if (trainLog) trainLog.classList.add('error');
+    });
+  };
+
+  // Auto-load if training is already running (or finished but buffer exists)
+  loadStatusAndMaybeStream();
+})();
+</script>
+{% endblock %}

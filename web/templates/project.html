@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Project — Uncertainty in Digital Pathology{% endblock %}
+{% block content %}
+<h1>Project</h1>
+<p class="page-subtitle">Project scope and the canonical reference list used by the thesis and the web UI.</p>
+
+<section class="section">
+  <div class="section-num">1. Uncertainty methods</div>
+  <div class="card">
+    <div class="info-box">
+      <ul>
+        <li><strong>Confidence baseline (MSP)</strong>: single-pass softmax confidence (`1 - MSP` as uncertainty). Used as a crude baseline only.</li>
+        <li><strong>MC Dropout</strong>: multiple stochastic forward passes with dropout active at inference; mean prediction + uncertainty from disagreement/entropy.</li>
+        <li><strong>Deep Ensemble</strong>: aggregate predictions from multiple separately trained checkpoints; used for stronger uncertainty/OOD behavior.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-num">2. Ordered literature list</div>
+  <div class="card">
+    <p>The pathology-specific literature below follows the fixed numbering requested for the thesis review and web reporting.</p>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>No.</th>
+            <th>Reference</th>
+            <th>Why it matters here</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for ref in references.ordered_literature %}
+          <tr>
+            <td>[{{ ref.number }}]</td>
+            <td>
+              <strong>{{ ref.title }}</strong><br>
+              <span style="color:var(--text-secondary);">{{ ref.citation }}</span>
+            </td>
+            <td>{{ ref.summary }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-num">3. Core background references</div>
+  <div class="card">
+    <p>These are the implementation and methodology references used for the model, dataset, and baseline uncertainty methods.</p>
+    <ul>
+      {% for ref in references.foundation_references %}
+      <li><strong>{{ ref.label }}</strong>: {{ ref.citation }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+</section>
+
+{% endblock %}

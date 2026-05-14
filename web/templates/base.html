@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Uncertainty Estimation in AI-Powered Digital Pathology{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script>
+    (function () {
+      var saved = localStorage.getItem('theme');
+      var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      var theme = (saved === 'light' || saved === 'dark') ? saved : (prefersDark ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-theme', theme);
+    })();
+  </script>
+</head>
+<body>
+  <nav class="nav">
+    <a href="{{ url_for('index') }}" class="nav-logo">Uncertainty Estimation in AI-Powered Digital Pathology</a>
+    <div class="nav-actions">
+      <div class="nav-links">
+        <a href="{{ url_for('index') }}">Home</a>
+        <a href="{{ url_for('setup_page') }}">Setup</a>
+        <a href="{{ url_for('run_page') }}">Run</a>
+        <a href="{{ url_for('evaluate_page') }}">Results</a>
+      </div>
+      <button class="btn btn-theme" id="theme-toggle" type="button" aria-label="Toggle color theme">Dark mode</button>
+    </div>
+  </nav>
+  <main class="main">
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="footer">
+    Thesis project — Uncertainty Estimation in AI-Powered Digital Pathology
+  </footer>
+  <script>
+    (function () {
+      var root = document.documentElement;
+      var btn = document.getElementById('theme-toggle');
+      if (!btn) return;
+
+      var updateLabel = function (theme) {
+        btn.textContent = theme === 'dark' ? 'Light mode' : 'Dark mode';
+      };
+
+      var current = root.getAttribute('data-theme') || 'light';
+      updateLabel(current);
+
+      btn.addEventListener('click', function () {
+        var theme = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+        root.setAttribute('data-theme', theme);
+        localStorage.setItem('theme', theme);
+        updateLabel(theme);
+      });
+    })();
+  </script>
+</body>
+</html>

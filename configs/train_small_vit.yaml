@@ -1,0 +1,29 @@
+seed: 42
+
+run:
+  output_base: runs
+  name: thesis_train_small_vit
+
+pipeline:
+  mode: train
+
+dataset:
+  type: pcam
+  root: data/raw
+  image_size: [224, 224]
+  batch_size: 4
+  num_workers: 0
+  seed: 42
+
+model:
+  source: huggingface
+  model_id: google/vit-base-patch16-224
+  num_labels: 2
+  dropout: 0.1
+  local_checkpoint: null
+
+train:
+  epochs: 1
+  lr: 2.0e-5
+  n_train: 1000
+  n_val: 200

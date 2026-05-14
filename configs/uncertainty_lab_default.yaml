@@ -1,0 +1,62 @@
+# Uncertainty Lab — default pipeline configuration (YAML)
+
+seed: 42
+
+run:
+  output_base: runs
+  name: null
+  run_dir: null
+
+pipeline:
+  mode: evaluate
+  # evaluate | train | train_evaluate
+
+dataset:
+  type: pcam
+  root: data/raw
+  image_size: [224, 224]
+  batch_size: 32
+  num_workers: 0  # auto: use CPU cores minus one
+  max_eval_samples: 2000
+  eval_split: test
+  seed: 42
+  val_fraction: 0.15
+  test_fraction: 0.15
+  class_dirs: null
+  # For type: csv — header row with path + label columns (0/1):
+  # csv_path: data/manifest.csv
+  # path_column: path
+  # label_column: label
+  # csv_base_dir: null
+
+model:
+  source: huggingface
+  model_id: google/vit-base-patch16-224
+  num_labels: 2
+  dropout: 0.1
+  cache_dir: null
+  local_checkpoint: null
+  ensemble_checkpoints: []
+
+uncertainty:
+  method: confidence
+  mc_dropout_n_samples: 30
+
+train:
+  epochs: 3
+  lr: 2.0e-5
+  n_train: null
+  n_val: null
+
+evaluation:
+  calibration_bins: 15
+  top_k_uncertain: 12
+  plots:
+    reliability: true
+    risk_coverage: true
+    uncertainty_histograms: true
+
+benchmark:
+  methods:
+    - confidence
+    - mc_dropout

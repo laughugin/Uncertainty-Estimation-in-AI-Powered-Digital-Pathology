@@ -1,0 +1,36 @@
+# Default config for uncertainty estimation in digital pathology
+
+seed: 42
+
+data:
+  root: "data/raw"
+  dataset: "pcam"
+  splits:
+    train: true
+    val: true
+    test: true
+  image_size: [224, 224]  # for ViT; PCAM is 96x96, will be resized
+  batch_size: 32
+  num_workers: 0  # auto: use CPU cores minus one
+
+model:
+  model_id: "google/vit-base-patch16-224"
+  num_labels: 2
+  dropout: 0.1
+  cache_dir: null  # or path, e.g. "./cache"
+
+uncertainty:
+  methods:
+    - confidence
+    - mc_dropout
+  mc_dropout_n_samples: 30
+
+train:
+  epochs: 3
+  lr: 2.0e-5
+  checkpoint_dir: "checkpoints"
+  save_every: 1
+
+evaluation:
+  calibration_bins: 15
+  random_test_n: 24

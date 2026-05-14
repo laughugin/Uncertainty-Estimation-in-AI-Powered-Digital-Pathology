@@ -1,0 +1,2707 @@
+{% extends "base.html" %}
+{% block title %}Evaluation — Uncertainty in Digital Pathology{% endblock %}
+{% block content %}
+<h1>Evaluation</h1>
+<section class="section">
+  <div class="section-num">1. Full Bundle Evaluation</div>
+  <div class="card">
+    <div class="form-row" style="flex-wrap:wrap;gap:1rem;margin-bottom:0.75rem;">
+      <div class="form-group">
+        <label for="run-select">Training run</label>
+        <select id="run-select" style="min-width:18rem;">
+          <option value="">Latest / default checkpoint</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="bundle-split">Split</label>
+        <select id="bundle-split">
+          <option value="test" selected>Test</option>
+          <option value="val">Validation</option>
+          <option value="train">Train</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="bundle-max-samples">Max samples</label>
+        <input type="number" id="bundle-max-samples" value="256" min="1" max="50000" step="1" style="width:7rem;">
+      </div>
+      <div class="form-group">
+        <label for="bundle-batch-size">Batch size</label>
+        <input type="number" id="bundle-batch-size" value="64" min="1" max="1024" step="1" style="width:6rem;">
+      </div>
+      <div class="form-group">
+        <label for="bundle-mc-samples">MC samples</label>
+        <input type="number" id="bundle-mc-samples" value="30" min="2" max="100" step="1" style="width:6rem;">
+      </div>
+      <div class="form-group">
+        <label for="bundle-fit-temp">Temperature scaling</label>
+        <select id="bundle-fit-temp">
+          <option value="0" selected>No</option>
+          <option value="1">Yes</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="bundle-fit-deferral">Val-fitted deferral</label>
+        <select id="bundle-fit-deferral">
+          <option value="1" selected>Yes</option>
+          <option value="0">No</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="bundle-shift-sev">Shift severities</label>
+        <input type="text" id="bundle-shift-sev" value="1,3,5" style="width:8rem;">
+      </div>
+      <div class="form-group">
+        <label for="bundle-ensemble-size">Ensemble size</label>
+        <input type="number" id="bundle-ensemble-size" value="2" min="1" max="10" step="1" style="width:6rem;">
+      </div>
+      <div class="form-group">
+        <label for="bundle-include-ens">Include deep ensemble</label>
+        <select id="bundle-include-ens">
+          <option value="1" selected>Yes</option>
+          <option value="0">No</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="margin-top:0.75rem;padding:0.85rem;border:1px solid var(--border);border-radius:8px;background:var(--bg-subtle);">
+      <div class="metric-label">Shared deep ensemble members for Run all</div>
+      <div class="form-row" style="flex-wrap:wrap;gap:0.75rem;align-items:flex-end;">
+        <div class="form-group" style="min-width:30rem;">
+          <label>Choose compatible runs for the full bundle</label>
+          <div id="bundle-ensemble-picker" style="min-width:30rem;max-width:100%;"></div>
+        </div>
+      </div>
+      <div id="bundle-ensemble-note" style="display:none;margin-top:0.5rem;color:var(--text-secondary);font-size:0.88rem;">
+        These shared members are only used by `Run all`. Each section comparison below now remembers its own checked deep-ensemble members separately.
+      </div>
+    </div>
+
+    <button class="btn btn-primary" id="btn-run-all">Run all evaluations</button>
+    <span class="status-badge" id="run-badge" style="margin-left:0.5rem;">Idle</span>
+
+    <div style="margin-top:1rem;">
+      <div class="metric-label">Live progress</div>
+      <div style="width:100%;height:14px;background:var(--bg-subtle);border:1px solid var(--border);border-radius:999px;overflow:hidden;">
+        <div id="progress-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#1f77b4,#2ca02c);transition:width 0.25s ease;"></div>
+      </div>
+      <div id="progress-text" style="margin-top:0.5rem;color:var(--text-secondary);font-size:0.9rem;">No evaluation running.</div>
+      <pre id="live-log" style="margin-top:0.75rem;white-space:pre-wrap;background:var(--bg-subtle);padding:0.75rem;border:1px solid var(--border);border-radius:6px;max-height:280px;overflow:auto;">Waiting to start.</pre>
+    </div>
+
+    <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border);">
+      <div class="metric-label">Preload saved bundle</div>
+      <div class="form-row" style="flex-wrap:wrap;gap:0.75rem;align-items:flex-end;">
+        <div class="form-group">
+          <label for="saved-bundle-select">Saved result</label>
+          <select id="saved-bundle-select" style="min-width:28rem;">
+            <option value="">No saved bundle selected</option>
+          </select>
+        </div>
+        <button class="btn" id="btn-load-saved">Load saved results</button>
+      </div>
+      <div id="saved-bundle-note" style="display:none;margin-top:0.5rem;color:var(--text-secondary);font-size:0.85rem;">
+        Saved bundle results are filtered by the selected training run when possible.
+      </div>
+      <div id="saved-bundle-preview" style="margin-top:0.5rem;color:var(--text-secondary);font-size:0.88rem;white-space:pre-wrap;">
+        Preview appears here for the selected run and split.
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="results-section" style="display:none;">
+  <div class="section-num">2. Bundle Results</div>
+  <div class="card">
+    <div id="bundle-summary" style="display:none;margin-bottom:1rem;color:var(--text-secondary);font-size:0.95rem;"></div>
+
+    <div class="table-wrap" style="margin-bottom:1rem;">
+      <table class="data-table" id="core-metrics-table">
+        <thead>
+          <tr>
+            <th>Method</th>
+            <th>Accuracy</th>
+            <th>ROC AUC</th>
+            <th>PR AUC</th>
+            <th>Sensitivity</th>
+            <th>Specificity</th>
+            <th>ECE</th>
+            <th>Brier</th>
+            <th>AURC</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td colspan="9">No result loaded.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1rem;">
+      <div>
+        <div class="metric-label">Program-generated benchmark summary</div>
+        <img id="benchmark-summary-img" alt="Benchmark summary" style="width:100%;border:1px solid var(--border);border-radius:6px;display:block;background:var(--bg-subtle);min-height:220px;">
+      </div>
+      <div>
+        <div class="metric-label">Reliability comparison</div>
+        <img id="reliability-img" alt="Reliability comparison" style="width:100%;border:1px solid var(--border);border-radius:6px;display:block;background:var(--bg-subtle);min-height:220px;">
+      </div>
+      <div>
+        <div class="metric-label">Risk-coverage comparison</div>
+        <img id="risk-coverage-img" alt="Risk coverage comparison" style="width:100%;border:1px solid var(--border);border-radius:6px;display:block;background:var(--bg-subtle);min-height:220px;">
+      </div>
+      <div>
+        <div class="metric-label">Shift / OOD comparison</div>
+        <img id="shift-summary-img" alt="Shift OOD comparison" style="width:100%;border:1px solid var(--border);border-radius:6px;display:block;background:var(--bg-subtle);min-height:220px;">
+      </div>
+    </div>
+    <div id="figure-source-note" style="display:none;margin-top:0.75rem;color:var(--text-secondary);font-size:0.88rem;">
+      The report uses server-generated figures saved with the run, so the same assets can be reused later without redrawing them in the browser.
+    </div>
+
+    <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border);">
+      <div class="form-row" style="flex-wrap:wrap;gap:0.75rem;align-items:flex-end;">
+        <div class="form-group">
+          <label for="detail-method-select">Detailed method report</label>
+          <select id="detail-method-select" style="min-width:14rem;">
+            <option value="">No method available</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="shift-detail-metric">Shift detail metric</label>
+          <select id="shift-detail-metric" style="min-width:14rem;">
+            <option value="ood_detection_auroc" selected>OOD AUROC</option>
+            <option value="ood_detection_auprc">OOD AUPRC</option>
+            <option value="accuracy">Accuracy</option>
+            <option value="ece">ECE</option>
+            <option value="nll">NLL</option>
+            <option value="brier">Brier</option>
+          </select>
+        </div>
+      </div>
+      <div id="detail-summary" style="display:none;margin-top:0.5rem;color:var(--text-secondary);font-size:0.9rem;">
+        Detailed per-method report appears after a bundle is loaded.
+      </div>
+      <div id="detail-references" style="display:none;margin-top:0.35rem;color:var(--text-secondary);font-size:0.85rem;">
+        Method-specific references will appear here after a bundle is loaded.
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1rem;margin-top:0.75rem;">
+        <div>
+          <div class="metric-label">Confusion matrix</div>
+          <img id="confusion-img" alt="Confusion matrix" style="width:100%;border:1px solid var(--border);border-radius:6px;display:block;background:var(--bg-subtle);min-height:220px;">
+        </div>
+        <div>
+          <div class="metric-label">Calibration before / after</div>
+          <img id="temperature-img" alt="Calibration before after" style="width:100%;border:1px solid var(--border);border-radius:6px;display:block;background:var(--bg-subtle);min-height:220px;">
+        </div>
+        <div>
+          <div class="metric-label">Error ROC (entropy vs 1-MSP)</div>
+          <img id="error-roc-img" alt="Error ROC" style="width:100%;border:1px solid var(--border);border-radius:6px;display:block;background:var(--bg-subtle);min-height:220px;">
+        </div>
+        <div>
+          <div class="metric-label">Error PR (entropy vs 1-MSP)</div>
+          <img id="error-pr-img" alt="Error PR" style="width:100%;border:1px solid var(--border);border-radius:6px;display:block;background:var(--bg-subtle);min-height:220px;">
+        </div>
+        <div>
+          <div class="metric-label">Uncertainty histogram</div>
+          <img id="uncertainty-hist-img" alt="Uncertainty histogram" style="width:100%;border:1px solid var(--border);border-radius:6px;display:block;background:var(--bg-subtle);min-height:220px;">
+        </div>
+        <div>
+          <div class="metric-label">Entropy histogram</div>
+          <img id="entropy-hist-img" alt="Entropy histogram" style="width:100%;border:1px solid var(--border);border-radius:6px;display:block;background:var(--bg-subtle);min-height:220px;">
+        </div>
+        <div style="grid-column:1 / -1;">
+          <div class="metric-label">Per-condition shift detail</div>
+          <img id="shift-detail-img" alt="Shift detail" style="width:100%;border:1px solid var(--border);border-radius:6px;display:block;background:var(--bg-subtle);min-height:260px;">
+          <!-- Per-condition breakdown table with corruption thumbnails -->
+          <div id="bundle-cond-strip" style="display:none;margin-top:0.75rem;overflow-x:auto;">
+            <div id="bundle-cond-strip-inner" style="display:flex;gap:6px;align-items:flex-end;padding-bottom:4px;"></div>
+            <p style="font-size:0.78rem;color:var(--muted);margin:4px 0 0;">
+              Sample patch #42 — same transforms applied during evaluation. Green = mild (S1), amber = medium (S3), red = severe (S5).
+            </p>
+          </div>
+          <div class="table-wrap" style="margin-top:0.75rem;display:none;" id="bundle-cond-table-wrap">
+            <table class="data-table" id="bundle-cond-table">
+              <thead>
+                <tr>
+                  <th style="width:68px;">Preview</th>
+                  <th>Method / Condition</th>
+                  <th>Accuracy</th>
+                  <th>ECE</th>
+                  <th>Mean uncertainty</th>
+                  <th>OOD AUROC</th>
+                  <th>OOD AUPRC</th>
+                </tr>
+              </thead>
+              <tbody><tr><td colspan="7">Load a bundle to see per-condition shift detail.</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="table-wrap" style="margin-top:0.75rem;">
+        <table class="data-table" id="uncertainty-quality-table">
+          <thead>
+            <tr>
+              <th>Proxy</th>
+              <th>Error-detection AUROC</th>
+              <th>Error-detection AUPRC</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td colspan="3">No detailed method selected.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="table-wrap" style="margin-top:0.75rem;">
+        <table class="data-table" id="target-risk-table">
+          <thead>
+            <tr>
+              <th>Target risk</th>
+              <th>Threshold</th>
+              <th>Coverage</th>
+              <th>Observed risk</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td colspan="4">No target-risk thresholds loaded.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div style="display:none;margin-top:0.75rem;color:var(--text-secondary);font-size:0.9rem;" id="report-comments">
+        Reporting comments will appear here after a bundle is loaded.
+      </div>
+    </div>
+
+    <div class="table-wrap" style="margin-top:1rem;">
+      <table class="data-table" id="shift-summary-table">
+        <thead>
+          <tr>
+            <th>Method</th>
+            <th>Near-OOD conditions</th>
+            <th>Near-OOD mean AUROC</th>
+            <th>Near-OOD mean AUPRC</th>
+            <th>Near-OOD mean accuracy</th>
+            <th>Near-OOD mean ECE</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td colspan="6">No result loaded.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border);">
+      <div class="form-row" style="flex-wrap:wrap;gap:0.75rem;align-items:flex-end;">
+        <div class="form-group">
+          <label for="batch-method-select">Batch correctness method</label>
+          <select id="batch-method-select" style="min-width:14rem;">
+            <option value="">No method available</option>
+          </select>
+        </div>
+      </div>
+      <div id="batch-summary" style="display:none;margin-top:0.5rem;color:var(--text-secondary);font-size:0.9rem;">
+        Batch correctness will appear after a bundle is loaded.
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1rem;margin-top:0.75rem;">
+        <div>
+          <div class="metric-label">Batch correctness overview</div>
+          <canvas id="batch-correctness-chart" width="420" height="280" style="width:100%;border:1px solid var(--border);border-radius:6px;"></canvas>
+        </div>
+        <div>
+          <div class="metric-label">Per-sample confidence</div>
+          <canvas id="batch-confidence-chart" width="420" height="280" style="width:100%;border:1px solid var(--border);border-radius:6px;"></canvas>
+        </div>
+      </div>
+      <div class="table-wrap" style="margin-top:0.75rem;">
+        <table class="data-table" id="batch-table">
+          <thead>
+            <tr>
+              <th>Idx</th>
+              <th>GT</th>
+              <th>Pred</th>
+              <th>Confidence</th>
+              <th>Correct</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td colspan="5">No batch results loaded.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <pre id="bundle-json-note" style="display:none;margin-top:1rem;white-space:pre-wrap;background:var(--bg-subtle);padding:0.75rem;border:1px solid var(--border);border-radius:6px;">No bundle output yet.</pre>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-num">3. Section Comparisons</div>
+  <div class="card">
+    <div style="display:flex;flex-direction:column;gap:1rem;">
+      <div style="border:1px solid var(--border);border-radius:8px;padding:1rem;background:var(--bg-subtle);">
+        <div class="metric-label">Predictive performance</div>
+        <div id="section-ensemble-picker-performance" style="margin-top:0.75rem;"></div>
+        <button class="btn btn-primary" id="btn-run-section-performance" style="margin-top:0.75rem;">Run section comparison</button>
+        <div style="margin-top:0.75rem;padding-top:0.75rem;border-top:1px dashed var(--border);">
+          <div class="form-row" style="flex-wrap:wrap;gap:0.75rem;align-items:flex-end;">
+            <div class="form-group">
+              <label for="saved-section-performance-select">Saved predictive-performance result</label>
+              <select id="saved-section-performance-select" style="min-width:28rem;">
+                <option value="">No saved result selected</option>
+              </select>
+            </div>
+            <button class="btn" id="btn-load-section-performance">Load saved section</button>
+          </div>
+          <div id="saved-section-performance-note" style="display:none;margin-top:0.35rem;color:var(--text-secondary);font-size:0.85rem;">Saved predictive-performance results for the selected run and split appear here.</div>
+        </div>
+        <div id="performance-results-card" style="display:none;margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border);">
+          <div class="metric-label" style="font-size:1rem;">Predictive Performance Result</div>
+          <div id="performance-result-summary" style="display:none;margin-top:0.35rem;color:var(--text-secondary);font-size:0.92rem;"></div>
+          <div id="performance-result-interpretation" style="display:none;margin-top:0.35rem;color:var(--text);font-size:0.92rem;"></div>
+          <div style="display:none;margin-top:0.5rem;color:var(--text-secondary);font-size:0.88rem;" id="performance-result-visual-note">
+            Thresholded metrics and ranking metrics are shown separately because they answer different questions.
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1rem;margin-top:0.75rem;">
+            <div>
+              <div class="metric-label">Thresholded classification metrics</div>
+              <img id="performance-thresholded-img" alt="Thresholded predictive metrics" style="width:100%;border:1px solid var(--border);border-radius:6px;display:block;background:var(--bg-subtle);min-height:220px;">
+            </div>
+            <div>
+              <div class="metric-label">Ranking metrics</div>
+              <img id="performance-ranking-img" alt="Ranking predictive metrics" style="width:100%;border:1px solid var(--border);border-radius:6px;display:block;background:var(--bg-subtle);min-height:220px;">
+            </div>
+          </div>
+          <div class="table-wrap" style="margin-top:0.75rem;">
+            <table class="data-table" id="core-performance-table">
+              <thead><tr><th>Method</th><th>Accuracy</th><th>Balanced accuracy</th><th>F1</th><th>ROC AUC</th><th>PR AUC</th><th>Sensitivity</th><th>Specificity</th></tr></thead>
+              <tbody><tr><td colspan="8">No predictive-performance result loaded.</td></tr></tbody>
+            </table>
+          </div>
+          <div id="performance-result-source" style="display:none;margin-top:0.5rem;color:var(--text-secondary);font-size:0.85rem;"></div>
+          <pre id="performance-json-note" style="display:none;margin-top:0.75rem;white-space:pre-wrap;background:var(--bg);padding:0.75rem;border:1px solid var(--border);border-radius:6px;">No predictive-performance output yet.</pre>
+        </div>
+      </div>
+
+      <div style="border:1px solid var(--border);border-radius:8px;padding:1rem;background:var(--bg-subtle);">
+        <div class="metric-label">Calibration</div>
+        <div id="section-ensemble-picker-calibration" style="margin-top:0.75rem;"></div>
+        <button class="btn btn-primary" id="btn-run-section-calibration" style="margin-top:0.75rem;">Run section comparison</button>
+        <div style="margin-top:0.75rem;padding-top:0.75rem;border-top:1px dashed var(--border);">
+          <div class="form-row" style="flex-wrap:wrap;gap:0.75rem;align-items:flex-end;">
+            <div class="form-group">
+              <label for="saved-section-calibration-select">Saved calibration result</label>
+              <select id="saved-section-calibration-select" style="min-width:28rem;">
+                <option value="">No saved result selected</option>
+              </select>
+            </div>
+            <button class="btn" id="btn-load-section-calibration">Load saved section</button>
+          </div>
+          <div id="saved-section-calibration-note" style="display:none;margin-top:0.35rem;color:var(--text-secondary);font-size:0.85rem;">Saved calibration results for the selected run and split appear here.</div>
+        </div>
+        <div id="calibration-results-card" style="display:none;margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border);">
+          <div class="metric-label" style="font-size:1rem;">Calibration Result</div>
+          <div id="calibration-result-summary" style="display:none;margin-top:0.35rem;color:var(--text-secondary);font-size:0.92rem;"></div>
+          <div id="calibration-result-interpretation" style="display:none;margin-top:0.35rem;color:var(--text);font-size:0.92rem;"></div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1rem;margin-top:0.75rem;">
+            <div class="table-wrap">
+              <table class="data-table" id="core-calibration-table">
+                <thead><tr><th>Method</th><th>ECE</th><th>NLL</th><th>Brier</th><th>Temperature</th><th>Calibrated ECE</th></tr></thead>
+                <tbody><tr><td colspan="6">No calibration result loaded.</td></tr></tbody>
+              </table>
+            </div>
+            <div style="display:grid;gap:0.75rem;">
+              <img id="calibration-metrics-img" alt="Calibration metric summary" style="width:100%;border:1px solid var(--border);border-radius:6px;min-height:220px;object-fit:contain;background:var(--bg);" />
+              <img id="calibration-reliability-img" alt="Calibration reliability comparison" style="width:100%;border:1px solid var(--border);border-radius:6px;min-height:220px;object-fit:contain;background:var(--bg);" />
+            </div>
+          </div>
+          <div id="calibration-result-source" style="display:none;margin-top:0.5rem;color:var(--text-secondary);font-size:0.85rem;"></div>
+          <pre id="calibration-json-note" style="display:none;margin-top:0.75rem;white-space:pre-wrap;background:var(--bg);padding:0.75rem;border:1px solid var(--border);border-radius:6px;">No calibration output yet.</pre>
+        </div>
+      </div>
+
+      <div style="border:1px solid var(--border);border-radius:8px;padding:1rem;background:var(--bg-subtle);">
+        <div class="metric-label">Uncertainty quality</div>
+        <div id="section-ensemble-picker-uncertainty" style="margin-top:0.75rem;"></div>
+        <button class="btn btn-primary" id="btn-run-section-uncertainty" style="margin-top:0.75rem;">Run section comparison</button>
+        <div style="margin-top:0.75rem;padding-top:0.75rem;border-top:1px dashed var(--border);">
+          <div class="form-row" style="flex-wrap:wrap;gap:0.75rem;align-items:flex-end;">
+            <div class="form-group">
+              <label for="saved-section-uncertainty-select">Saved uncertainty-quality result</label>
+              <select id="saved-section-uncertainty-select" style="min-width:28rem;">
+                <option value="">No saved result selected</option>
+              </select>
+            </div>
+            <button class="btn" id="btn-load-section-uncertainty">Load saved section</button>
+          </div>
+          <div id="saved-section-uncertainty-note" style="display:none;margin-top:0.35rem;color:var(--text-secondary);font-size:0.85rem;">Saved uncertainty-quality results for the selected run and split appear here.</div>
+        </div>
+        <div id="uncertainty-results-card" style="display:none;margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border);">
+          <div class="metric-label" style="font-size:1rem;">Uncertainty Quality Result</div>
+          <div id="uncertainty-result-summary" style="display:none;margin-top:0.35rem;color:var(--text-secondary);font-size:0.92rem;"></div>
+          <div id="uncertainty-result-interpretation" style="display:none;margin-top:0.35rem;color:var(--text);font-size:0.92rem;"></div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1rem;margin-top:0.75rem;">
+            <img id="uncertainty-primary-img" alt="Primary uncertainty score comparison" style="width:100%;border:1px solid var(--border);border-radius:6px;min-height:220px;object-fit:contain;background:var(--bg);" />
+            <img id="uncertainty-common-img" alt="Shared uncertainty score comparison" style="width:100%;border:1px solid var(--border);border-radius:6px;min-height:220px;object-fit:contain;background:var(--bg);" />
+          </div>
+          <div class="table-wrap" style="margin-top:0.75rem;">
+            <table class="data-table" id="core-uq-table">
+              <thead><tr><th>Method</th><th>Primary uncertainty</th><th>Primary AUROC</th><th>Primary AUPRC</th><th>Entropy AUROC</th><th>1-MSP AUROC</th></tr></thead>
+              <tbody><tr><td colspan="6">No uncertainty-quality result loaded.</td></tr></tbody>
+            </table>
+          </div>
+          <div id="uncertainty-result-source" style="display:none;margin-top:0.5rem;color:var(--text-secondary);font-size:0.85rem;"></div>
+          <pre id="uncertainty-json-note" style="display:none;margin-top:0.75rem;white-space:pre-wrap;background:var(--bg);padding:0.75rem;border:1px solid var(--border);border-radius:6px;">No uncertainty-quality output yet.</pre>
+        </div>
+      </div>
+
+      <div style="border:1px solid var(--border);border-radius:8px;padding:1rem;background:var(--bg-subtle);">
+        <div class="metric-label">Selective prediction</div>
+        <div id="section-ensemble-picker-selective" style="margin-top:0.75rem;"></div>
+        <button class="btn btn-primary" id="btn-run-section-selective" style="margin-top:0.75rem;">Run section comparison</button>
+        <div style="margin-top:0.75rem;padding-top:0.75rem;border-top:1px dashed var(--border);">
+          <div class="form-row" style="flex-wrap:wrap;gap:0.75rem;align-items:flex-end;">
+            <div class="form-group">
+              <label for="saved-section-selective-select">Saved selective-prediction result</label>
+              <select id="saved-section-selective-select" style="min-width:28rem;">
+                <option value="">No saved result selected</option>
+              </select>
+            </div>
+            <button class="btn" id="btn-load-section-selective">Load saved section</button>
+          </div>
+          <div id="saved-section-selective-note" style="display:none;margin-top:0.35rem;color:var(--text-secondary);font-size:0.85rem;">Saved selective-prediction results for the selected run and split appear here.</div>
+        </div>
+        <div id="selective-results-card" style="display:none;margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border);">
+          <div class="metric-label" style="font-size:1rem;">Selective Prediction Result</div>
+          <div id="selective-result-summary" style="display:none;margin-top:0.35rem;color:var(--text-secondary);font-size:0.92rem;"></div>
+          <div id="selective-result-interpretation" style="display:none;margin-top:0.35rem;color:var(--text);font-size:0.92rem;"></div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1rem;margin-top:0.75rem;">
+            <div class="table-wrap">
+              <table class="data-table" id="core-selective-table">
+                <thead><tr><th>Method</th><th>AURC</th><th>Torch AURC</th><th>Target-risk summary</th><th>Val-fitted deferral</th></tr></thead>
+                <tbody><tr><td colspan="5">No selective-prediction result loaded.</td></tr></tbody>
+              </table>
+            </div>
+            <div style="display:grid;gap:0.75rem;">
+              <img id="selective-risk-coverage-img" alt="Selective prediction risk coverage" style="width:100%;border:1px solid var(--border);border-radius:6px;min-height:220px;object-fit:contain;background:var(--bg);" />
+              <img id="selective-high-confidence-img" alt="Selective prediction high confidence cohort" style="width:100%;border:1px solid var(--border);border-radius:6px;min-height:220px;object-fit:contain;background:var(--bg);" />
+            </div>
+          </div>
+          <div id="selective-result-source" style="display:none;margin-top:0.5rem;color:var(--text-secondary);font-size:0.85rem;"></div>
+          <pre id="selective-json-note" style="display:none;margin-top:0.75rem;white-space:pre-wrap;background:var(--bg);padding:0.75rem;border:1px solid var(--border);border-radius:6px;">No selective-prediction output yet.</pre>
+        </div>
+      </div>
+
+      <div style="border:1px solid var(--border);border-radius:8px;padding:1rem;background:var(--bg-subtle);">
+        <div class="metric-label">Pathology proxy reporting</div>
+        <div id="section-ensemble-picker-pathology" style="margin-top:0.75rem;"></div>
+        <button class="btn btn-primary" id="btn-run-section-pathology" style="margin-top:0.75rem;">Run section comparison</button>
+        <div style="margin-top:0.75rem;padding-top:0.75rem;border-top:1px dashed var(--border);">
+          <div class="form-row" style="flex-wrap:wrap;gap:0.75rem;align-items:flex-end;">
+            <div class="form-group">
+              <label for="saved-section-pathology-select">Saved pathology-proxy result</label>
+              <select id="saved-section-pathology-select" style="min-width:28rem;">
+                <option value="">No saved result selected</option>
+              </select>
+            </div>
+            <button class="btn" id="btn-load-section-pathology">Load saved section</button>
+          </div>
+          <div id="saved-section-pathology-note" style="display:none;margin-top:0.35rem;color:var(--text-secondary);font-size:0.85rem;">Saved pathology-proxy results for the selected run and split appear here.</div>
+        </div>
+        <div id="pathology-results-card" style="display:none;margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border);">
+          <div class="metric-label" style="font-size:1rem;">Pathology Proxy Reporting Result</div>
+          <div id="pathology-result-summary" style="display:none;margin-top:0.35rem;color:var(--text-secondary);font-size:0.92rem;"></div>
+          <div id="pathology-result-interpretation" style="display:none;margin-top:0.35rem;color:var(--text);font-size:0.92rem;"></div>
+          <div style="margin-top:0.75rem;">
+            <img id="pathology-proxy-img" alt="Pathology proxy reporting comparison" style="width:100%;border:1px solid var(--border);border-radius:6px;min-height:240px;object-fit:contain;background:var(--bg);" />
+          </div>
+          <div class="table-wrap" style="margin-top:0.75rem;">
+            <table class="data-table" id="core-pathology-table">
+              <thead><tr><th>Method</th><th>Proxy type</th><th>Bag size</th><th>Pseudo-slides</th><th>Accuracy</th><th>ROC AUC</th><th>PR AUC</th></tr></thead>
+              <tbody><tr><td colspan="7">No pathology proxy result loaded.</td></tr></tbody>
+            </table>
+          </div>
+          <div id="pathology-result-source" style="display:none;margin-top:0.5rem;color:var(--text-secondary);font-size:0.85rem;"></div>
+          <pre id="pathology-json-note" style="display:none;margin-top:0.75rem;white-space:pre-wrap;background:var(--bg);padding:0.75rem;border:1px solid var(--border);border-radius:6px;">No pathology proxy output yet.</pre>
+        </div>
+      </div>
+
+      <div style="border:1px solid var(--border);border-radius:8px;padding:1rem;background:var(--bg-subtle);">
+        <div class="metric-label">Shift / OOD robustness</div>
+        <div id="section-ensemble-picker-shift" style="margin-top:0.75rem;"></div>
+        <button class="btn btn-primary" id="btn-run-section-shift" style="margin-top:0.75rem;">Run section comparison</button>
+        <div style="margin-top:0.75rem;padding-top:0.75rem;border-top:1px dashed var(--border);">
+          <div class="form-row" style="flex-wrap:wrap;gap:0.75rem;align-items:flex-end;">
+            <div class="form-group">
+              <label for="saved-section-shift-select">Saved shift / OOD result</label>
+              <select id="saved-section-shift-select" style="min-width:28rem;">
+                <option value="">No saved result selected</option>
+              </select>
+            </div>
+            <button class="btn" id="btn-load-section-shift">Load saved section</button>
+          </div>
+          <div id="saved-section-shift-note" style="display:none;margin-top:0.35rem;color:var(--text-secondary);font-size:0.85rem;">Saved shift / OOD results for the selected run and split appear here.</div>
+        </div>
+        <div id="shift-results-card" style="display:none;margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border);">
+          <div class="metric-label" style="font-size:1rem;">Method Shift / OOD Result</div>
+          <div id="shift-result-summary" style="display:none;margin-top:0.35rem;color:var(--text-secondary);font-size:0.92rem;"></div>
+          <div id="shift-result-interpretation" style="display:none;margin-top:0.35rem;color:var(--text);font-size:0.92rem;"></div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1rem;margin-top:0.75rem;">
+            <div>
+              <div class="metric-label">Grouped summary</div>
+              <div class="table-wrap">
+                <table class="data-table" id="shift-grouped-table">
+                  <thead><tr><th>Method</th><th>Near conditions</th><th>Near AUROC</th><th>Near AUPRC</th><th>Near accuracy</th><th>Near ECE</th><th>Far conditions</th><th>Far AUROC</th><th>Far AUPRC</th><th>Far accuracy</th><th>Far ECE</th></tr></thead>
+                  <tbody><tr><td colspan="11">No grouped summary loaded.</td></tr></tbody>
+                </table>
+              </div>
+            </div>
+            <div>
+              <div class="metric-label">Per-condition detail</div>
+              <!-- Filter strip: shows one sample at each severity for each shift type -->
+              <div id="shift-condition-strip" style="display:none;margin-bottom:0.75rem;overflow-x:auto;">
+                <div id="shift-condition-strip-inner" style="display:flex;gap:6px;align-items:flex-end;padding-bottom:4px;"></div>
+                <p style="font-size:0.78rem;color:var(--muted);margin:4px 0 0;">
+                  Sample patch #42 with each corruption applied — same transforms used during evaluation.
+                </p>
+              </div>
+              <div class="table-wrap">
+                <table class="data-table" id="shift-condition-table">
+                  <thead>
+                    <tr>
+                      <th style="width:68px;">Preview</th>
+                      <th>Condition</th>
+                      <th>Accuracy</th>
+                      <th>ECE</th>
+                      <th>Mean uncertainty</th>
+                      <th>OOD AUROC</th>
+                      <th>OOD AUPRC</th>
+                    </tr>
+                  </thead>
+                  <tbody><tr><td colspan="7">No shift detail loaded.</td></tr></tbody>
+                </table>
+              </div>
+            </div>
+            <div style="grid-column:1 / -1;display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1rem;">
+              <img id="shift-detection-img" alt="Shift and OOD detection summary" style="width:100%;border:1px solid var(--border);border-radius:6px;min-height:220px;object-fit:contain;background:var(--bg);" />
+              <img id="shift-robustness-img" alt="Shift robustness summary" style="width:100%;border:1px solid var(--border);border-radius:6px;min-height:220px;object-fit:contain;background:var(--bg);" />
+              <img id="shift-section-detail-img" alt="Shift per condition detail" style="grid-column:1 / -1;width:100%;border:1px solid var(--border);border-radius:6px;min-height:260px;object-fit:contain;background:var(--bg);" />
+            </div>
+          </div>
+          <div id="shift-result-source" style="display:none;margin-top:0.5rem;color:var(--text-secondary);font-size:0.85rem;"></div>
+          <pre id="shift-json-note" style="display:none;margin-top:0.75rem;white-space:pre-wrap;background:var(--bg);padding:0.75rem;border:1px solid var(--border);border-radius:6px;">No shift output yet.</pre>
+        </div>
+      </div>
+    </div>
+    <pre id="section-run-log" style="margin-top:1rem;white-space:pre-wrap;background:var(--bg-subtle);padding:0.75rem;border:1px solid var(--border);border-radius:6px;max-height:260px;overflow:auto;">Waiting to start.</pre>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-num">4. Literature Alignment</div>
+  <div class="card">
+    <div class="info-box">
+      <p><strong>References explicitly relevant to this evaluation report.</strong></p>
+      <div class="table-wrap" style="margin:0.75rem 0;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Report block</th>
+              <th>Main references</th>
+              <th>How they are used here</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>MSP baseline</td>
+              <td>[8], [11]</td>
+              <td>Used only as a crude pathology-relevant baseline for confidence/OOD comparison, not as a strong uncertainty method.</td>
+            </tr>
+            <tr>
+              <td>MC Dropout</td>
+              <td>Gal and Ghahramani (2016)</td>
+              <td>The implemented stochastic forward-pass method in this repository is based on dropout as a Bayesian approximation.</td>
+            </tr>
+            <tr>
+              <td>Deep Ensembles</td>
+              <td>Lakshminarayanan et al. (2017), [8], [11]</td>
+              <td>Deep ensembles are the core ensemble method source, while [8] and [11] justify pathology-specific shift and OOD evaluation.</td>
+            </tr>
+            <tr>
+              <td>Temperature scaling / calibration</td>
+              <td>Guo et al. (2017)</td>
+              <td>The post-hoc calibration method used in the report is temperature scaling in the standard classification setting.</td>
+            </tr>
+            <tr>
+              <td>Error detection, calibration, OOD metrics</td>
+              <td>[8], [11]</td>
+              <td>These are the strongest pathology-specific references supporting evaluation under realistic distribution shift and uncertainty-based discrimination.</td>
+            </tr>
+            <tr>
+              <td>Distribution shift / OOD in pathology</td>
+              <td>[8], [11]</td>
+              <td>Supports near-OOD/far-OOD analysis and pathology-specific shift robustness discussion.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <ul>
+        <li><strong>MC Dropout</strong>: grounded in Gal and Ghahramani (2016).</li>
+        <li><strong>Deep Ensembles</strong>: grounded in Lakshminarayanan et al. (2017), with [8] and [11] providing pathology-specific shift context.</li>
+        <li><strong>Temperature Scaling</strong>: grounded in Guo et al. (2017).</li>
+        <li><strong>Shift / OOD in pathology</strong>: grounded primarily in [8] and [11].</li>
+      </ul>
+      <div class="table-wrap" style="margin-top:0.75rem;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Reference</th>
+              <th>Why it is kept on this page</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>[8] Linmans et al. (2023)</td>
+              <td>Directly supports digital pathology OOD evaluation, patch-to-slide aggregation, and the near-OOD versus far-OOD framing used in this report.</td>
+            </tr>
+            <tr>
+              <td>[11] Thagaard et al. (2020)</td>
+              <td>Directly supports uncertainty behavior under real pathology dataset shifts and the claim that deep ensembles are comparatively robust under shift.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="margin-top:0.75rem;color:var(--text-secondary);font-size:0.9rem;">
+        The full ordered literature list remains on the <a href="{{ url_for('project') }}">Project</a> page. This evaluation page keeps only the references that most directly justify the implemented methods and reported pathology evaluation setting.
+      </p>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-num">5. Advanced Uncertainty Analysis</div>
+  <div class="card">
+    <div class="info-box">
+      <p><strong>Three advanced analyses</strong> extending the standard evaluation: conformal prediction (coverage guarantees), aleatoric vs. epistemic uncertainty decomposition, and calibration degradation under distribution shift.</p>
+    </div>
+
+    <!-- 5a. Conformal Prediction -->
+    <h3 style="margin:1rem 0 0.5rem;font-size:1.05rem;border-bottom:1px solid var(--border);padding-bottom:0.4rem;">Conformal Prediction</h3>
+    <div class="info-box" style="margin-bottom:0.75rem;">
+      <p>Split conformal prediction uses the validation set to set a threshold guaranteeing that true labels fall in the prediction set with probability ≥ 1−α. Smaller average set size = more efficient (confident) predictions.</p>
+    </div>
+    <div id="conformal-status" style="color:var(--muted);font-size:0.88rem;margin-bottom:0.5rem;">Loading…</div>
+    <div id="conformal-wrap" style="display:none;">
+      <div class="table-wrap">
+        <table class="data-table" id="conformal-table">
+          <thead>
+            <tr>
+              <th>Method</th>
+              <th>α (miscoverage)</th>
+              <th>Target coverage</th>
+              <th>Empirical coverage</th>
+              <th>Coverage gap</th>
+              <th>Avg set size</th>
+              <th>Singleton rate</th>
+              <th>Full set rate</th>
+            </tr>
+          </thead>
+          <tbody><tr><td colspan="8">Loading…</td></tr></tbody>
+        </table>
+      </div>
+      <div style="margin-top:0.75rem;display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1rem;">
+        <div>
+          <div class="metric-label">Coverage guarantee (empirical vs target)</div>
+          <img src="/api/evaluate/figures/conformal_coverage_setsize.png" alt="Conformal coverage" loading="lazy"
+               style="width:100%;border-radius:6px;border:1px solid var(--border);"
+               onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+          <p style="display:none;color:var(--muted);font-size:0.85rem;">Figure not yet generated. Run: <code>python3 experiments/run_conformal.py</code></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5b. Aleatoric / Epistemic -->
+    <h3 style="margin:1.5rem 0 0.5rem;font-size:1.05rem;border-bottom:1px solid var(--border);padding-bottom:0.4rem;">Aleatoric vs. Epistemic Uncertainty</h3>
+    <div class="info-box" style="margin-bottom:0.75rem;">
+      <p><strong>Epistemic</strong> (model uncertainty, reducible) ≈ Mutual Information. <strong>Aleatoric</strong> (data noise, irreducible) = Predictive Entropy − MI. A high aleatoric ratio means the patches themselves are ambiguous, not that the model needs more training.</p>
+    </div>
+    <div id="ae-status" style="color:var(--muted);font-size:0.88rem;margin-bottom:0.5rem;">Loading…</div>
+    <div id="ae-wrap" style="display:none;">
+      <div class="table-wrap">
+        <table class="data-table" id="ae-table">
+          <thead>
+            <tr><th>Component</th><th>Mean value</th><th>% of total</th><th>Error-det AUROC</th><th>Error-det AUPRC</th></tr>
+          </thead>
+          <tbody><tr><td colspan="5">Loading…</td></tr></tbody>
+        </table>
+      </div>
+      <div style="margin-top:0.75rem;display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1rem;">
+        <div>
+          <div class="metric-label">Uncertainty histograms (correct vs incorrect)</div>
+          <img src="/api/evaluate/figures/aleatoric_epistemic_histograms.png" alt="A/E histograms" loading="lazy"
+               style="width:100%;border-radius:6px;border:1px solid var(--border);"
+               onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+          <p style="display:none;color:var(--muted);font-size:0.85rem;">Run: <code>python3 experiments/run_aleatoric_epistemic.py</code></p>
+        </div>
+        <div>
+          <div class="metric-label">Epistemic vs aleatoric scatter (per sample)</div>
+          <img src="/api/evaluate/figures/aleatoric_epistemic_scatter.png" alt="A/E scatter" loading="lazy"
+               style="width:100%;border-radius:6px;border:1px solid var(--border);"
+               onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+          <p style="display:none;color:var(--muted);font-size:0.85rem;">Run: <code>python3 experiments/run_aleatoric_epistemic.py</code></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5c. ECE under shift -->
+    <h3 style="margin:1.5rem 0 0.5rem;font-size:1.05rem;border-bottom:1px solid var(--border);padding-bottom:0.4rem;">Calibration under Distribution Shift</h3>
+    <div class="info-box" style="margin-bottom:0.75rem;">
+      <p>Expected Calibration Error (ECE) as severity increases from clean (0) to mild (1), medium (3), severe (5). A well-calibrated model should degrade gracefully. Colour: green = mild, amber = medium, red = severe.</p>
+    </div>
+    <div id="ece-shift-status" style="color:var(--muted);font-size:0.88rem;margin-bottom:0.5rem;">Loading…</div>
+    <div id="ece-shift-wrap" style="display:none;">
+      <div id="ece-shift-table-wrap" class="table-wrap" style="margin-bottom:0.75rem;">
+        <table class="data-table" id="ece-shift-table">
+          <thead>
+            <tr><th>Method</th><th>Shift</th><th>Clean</th><th>Sev 1</th><th>Sev 3</th><th>Sev 5</th></tr>
+          </thead>
+          <tbody><tr><td colspan="6">Loading…</td></tr></tbody>
+        </table>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1rem;">
+        <div>
+          <div class="metric-label">ECE vs severity (all methods)</div>
+          <img src="/api/evaluate/figures/ece_under_shift.png" alt="ECE under shift" loading="lazy"
+               style="width:100%;border-radius:6px;border:1px solid var(--border);"
+               onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+          <p style="display:none;color:var(--muted);font-size:0.85rem;">Run: <code>python3 experiments/run_ece_under_shift.py</code></p>
+        </div>
+        <div>
+          <div class="metric-label">Accuracy vs severity (all methods)</div>
+          <img src="/api/evaluate/figures/accuracy_under_shift.png" alt="Accuracy under shift" loading="lazy"
+               style="width:100%;border-radius:6px;border:1px solid var(--border);"
+               onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+          <p style="display:none;color:var(--muted);font-size:0.85rem;">Run: <code>python3 experiments/run_ece_under_shift.py</code></p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-num">6. Cross-Domain OOD Detection</div>
+  <div class="card">
+    <div class="info-box">
+      <p><strong>Zero-shot cross-domain evaluation</strong>: the PCAM-trained model is applied to NCT-CRC-HE-100K colorectal histology — a completely different tissue type never seen during training. A well-calibrated uncertainty method should show <em>higher</em> uncertainty on NCT-CRC than on PCAM.</p>
+    </div>
+    <div id="ood-status" style="color:var(--muted);font-size:0.88rem;margin-bottom:0.5rem;">Loading…</div>
+    <div id="ood-wrap" style="display:none;">
+      <div class="table-wrap">
+        <table class="data-table" id="ood-table">
+          <thead>
+            <tr>
+              <th>Method</th>
+              <th>PCAM acc</th>
+              <th>PCAM mean unc</th>
+              <th>NCT-CRC acc</th>
+              <th>NCT-CRC mean unc</th>
+              <th>Unc ↑ on OOD?</th>
+              <th>Best OOD AUROC</th>
+            </tr>
+          </thead>
+          <tbody><tr><td colspan="7">Loading…</td></tr></tbody>
+        </table>
+      </div>
+      <div style="margin-top:0.75rem;">
+        <div class="info-box">
+          <p style="font-size:0.85rem;">OOD AUROC: distinguishing PCAM (ID) from NCT-CRC (OOD) using uncertainty as signal. Random = 0.50. Higher is better.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+let ws = null;
+let currentBundleResult = null;
+let currentTechniqueResults = {
+  performance: null,
+  calibration: null,
+  uncertainty: null,
+  selective: null,
+  pathology: null,
+  shift: null
+};
+let currentSavedBundles = [];
+let currentSavedSections = {
+  performance: [],
+  calibration: [],
+  uncertainty: [],
+  selective: [],
+  pathology: [],
+  shift: []
+};
+let currentDetailedMetrics = [];
+let currentReportManifest = null;
+let currentEnsembleCandidates = null;
+const METHOD_LABELS = {
+  confidence: 'Confidence',
+  temperature_scaled: 'Temp Scaled',
+  mc_dropout: 'MC Dropout',
+  deep_ensemble: 'Deep Ensemble'
+};
+
+function byId(id) { return document.getElementById(id); }
+
+function setHtml(id, html) {
+  const el = byId(id);
+  if (el) el.innerHTML = html;
+}
+
+function methodLabel(method) {
+  return METHOD_LABELS[method] || method || 'method';
+}
+
+function orderedMethodKeys(obj) {
+  const order = ['confidence', 'temperature_scaled', 'mc_dropout', 'deep_ensemble'];
+  const keys = Object.keys(obj || {});
+  return keys.sort(function(a, b) {
+    const ai = order.indexOf(a);
+    const bi = order.indexOf(b);
+    if (ai === -1 && bi === -1) return a.localeCompare(b);
+    if (ai === -1) return 1;
+    if (bi === -1) return -1;
+    return ai - bi;
+  });
+}
+
+const SECTION_KEYS = ['performance', 'calibration', 'uncertainty', 'selective', 'pathology', 'shift'];
+const sectionEnsembleSelections = {};
+let bundleEnsembleSelection = [];
+
+function sectionSelectId(section) {
+  return 'saved-section-' + section + '-select';
+}
+
+function sectionNoteId(section) {
+  return 'saved-section-' + section + '-note';
+}
+
+function sectionButtonId(section) {
+  return 'btn-run-section-' + section;
+}
+
+function sectionLoadButtonId(section) {
+  return 'btn-load-section-' + section;
+}
+
+function sectionEnsemblePickerId(section) {
+  return 'section-ensemble-picker-' + section;
+}
+
+function sectionEnsembleNoteId(section) {
+  return 'section-ensemble-note-' + section;
+}
+
+function sectionEnsembleRefreshButtonId(section) {
+  return 'btn-refresh-section-ensemble-' + section;
+}
+
+function bundleEnsemblePickerId() {
+  return 'bundle-ensemble-picker';
+}
+
+function sectionRenderer(section) {
+  return {
+    performance: renderPerformanceResult,
+    calibration: renderCalibrationResult,
+    uncertainty: renderUncertaintyResult,
+    selective: renderSelectiveResult,
+    pathology: renderPathologyResult,
+    shift: renderShiftResult
+  }[section];
+}
+
+function fmtStamp(ts) {
+  return ts ? new Date(ts * 1000).toLocaleString() : 'n/a';
+}
+
+function fmtPct(x) {
+  return x == null ? 'n/a' : (Number(x) * 100).toFixed(2) + '%';
+}
+
+function fmt4(x) {
+  return x == null ? 'n/a' : Number(x).toFixed(4);
+}
+
+function clearCanvas(id, text) {
+  const c = byId(id);
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, c.width, c.height);
+  ctx.fillStyle = '#666';
+  ctx.font = '12px sans-serif';
+  ctx.fillText(text || 'No data', 12, 20);
+}
+
+function artifactUrl(path) {
+  return '/api/evaluate/artifact?path=' + encodeURIComponent(path || '');
+}
+
+function sectionSourceText(outputPath) {
+  return outputPath ? ('Source summary: ' + outputPath) : 'Source summary not available.';
+}
+
+function bestMethod(methods, getter, lowerBetter) {
+  let best = null;
+  (methods || []).forEach(function(method) {
+    const value = Number(getter(method));
+    if (!isFinite(value)) return;
+    if (!best || (lowerBetter ? value < best.value : value > best.value)) best = {method: method, value: value};
+  });
+  return best;
+}
+
+function sharedEvalConfig() {
+  const payload = {
+    split: byId('bundle-split').value
+  };
+  const runId = byId('run-select').value;
+  if (runId) payload.run_id = runId;
+  return payload;
+}
+
+function setText(id, text) {
+  const el = byId(id);
+  if (el) el.textContent = text;
+}
+
+function clearFigure(id, text) {
+  const el = byId(id);
+  if (!el) return;
+  el.removeAttribute('src');
+  el.style.display = 'block';
+  el.style.minHeight = (el.id === 'shift-detail-img' || el.id === 'shift-section-detail-img') ? '260px' : '220px';
+  el.alt = text || 'No figure';
+}
+
+function setFigure(id, path, alt) {
+  const el = byId(id);
+  if (!el) return;
+  if (!path) {
+    clearFigure(id, alt || 'Figure not available');
+    return;
+  }
+  el.src = artifactUrl(path);
+  el.alt = alt || 'Report figure';
+}
+
+function drawAxes(ctx, w, h, pad, xLabel, yLabel) {
+  ctx.strokeStyle = '#999';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(pad, h - pad);
+  ctx.lineTo(w - pad, h - pad);
+  ctx.moveTo(pad, h - pad);
+  ctx.lineTo(pad, pad);
+  ctx.stroke();
+  ctx.fillStyle = '#666';
+  ctx.font = '11px sans-serif';
+  if (xLabel) ctx.fillText(xLabel, w - pad - 40, h - 8);
+  if (yLabel) ctx.fillText(yLabel, 6, pad - 6);
+}
+
+function drawLineChart(canvasId, series, xLabel, yLabel, diagonal) {
+  const c = byId(canvasId);
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  const w = c.width, h = c.height, pad = 34;
+  ctx.clearRect(0, 0, w, h);
+  drawAxes(ctx, w, h, pad, xLabel, yLabel);
+  if (diagonal) {
+    ctx.strokeStyle = '#bbb';
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(pad, h - pad);
+    ctx.lineTo(w - pad, pad);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  let hasAny = false;
+  (series || []).forEach(function(s) {
+    const points = s.points || [];
+    if (!points.length) return;
+    hasAny = true;
+    ctx.strokeStyle = s.color || '#1f77b4';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    let started = false;
+    points.forEach(function(p) {
+      const px = Number(p.x), py = Number(p.y);
+      if (!isFinite(px) || !isFinite(py)) return;
+      const x = pad + px * (w - 2 * pad);
+      const y = h - pad - py * (h - 2 * pad);
+      if (!started) { ctx.moveTo(x, y); started = true; } else { ctx.lineTo(x, y); }
+    });
+    ctx.stroke();
+  });
+  if (!hasAny) clearCanvas(canvasId, 'No curve data');
+}
+
+function drawGroupedBars(canvasId, categories, datasets, maxValue, formatter) {
+  const c = byId(canvasId);
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  const w = c.width, h = c.height, pad = 36;
+  ctx.clearRect(0, 0, w, h);
+  if (!categories.length || !datasets.length) {
+    clearCanvas(canvasId, 'No chart data');
+    return;
+  }
+  drawAxes(ctx, w, h, pad, '', '');
+  const groupWidth = (w - 2 * pad) / categories.length;
+  const barWidth = Math.min(28, (groupWidth - 12) / Math.max(1, datasets.length));
+  const ymax = maxValue > 0 ? maxValue : 1;
+  categories.forEach(function(cat, ci) {
+    ctx.fillStyle = '#666';
+    ctx.font = '11px sans-serif';
+    ctx.fillText(cat, pad + ci * groupWidth + 4, h - 10);
+    datasets.forEach(function(ds, di) {
+      const v = Number(ds.values[ci]);
+      if (!isFinite(v)) return;
+      const bh = (v / ymax) * (h - 2 * pad);
+      const x = pad + ci * groupWidth + 6 + di * barWidth;
+      const y = h - pad - bh;
+      ctx.fillStyle = ds.color;
+      ctx.fillRect(x, y, barWidth - 3, bh);
+      ctx.fillStyle = '#333';
+      ctx.font = '10px sans-serif';
+      ctx.fillText(formatter ? formatter(v) : String(v), x, Math.max(10, y - 4));
+    });
+  });
+  datasets.forEach(function(ds, i) {
+    const lx = pad + i * 130;
+    ctx.fillStyle = ds.color;
+    ctx.fillRect(lx, 10, 14, 10);
+    ctx.fillStyle = '#333';
+    ctx.font = '11px sans-serif';
+    ctx.fillText(ds.label, lx + 20, 19);
+  });
+}
+
+function drawConfusionMatrix(cm) {
+  const c = byId('confusion-chart');
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  const w = c.width, h = c.height;
+  ctx.clearRect(0, 0, w, h);
+  if (!cm) {
+    clearCanvas('confusion-chart', 'No confusion data');
+    return;
+  }
+  const vals = [Number(cm.tn || 0), Number(cm.fp || 0), Number(cm.fn || 0), Number(cm.tp || 0)];
+  const labels = ['TN', 'FP', 'FN', 'TP'];
+  const maxV = Math.max(1, ...vals);
+  const x0 = 90, y0 = 40, cell = 96;
+  for (let i = 0; i < 2; i++) {
+    for (let j = 0; j < 2; j++) {
+      const idx = i * 2 + j;
+      const v = vals[idx];
+      const a = 0.15 + 0.75 * (v / maxV);
+      ctx.fillStyle = 'rgba(31,119,180,' + a.toFixed(3) + ')';
+      ctx.fillRect(x0 + j * cell, y0 + i * cell, cell, cell);
+      ctx.strokeStyle = '#fff';
+      ctx.strokeRect(x0 + j * cell, y0 + i * cell, cell, cell);
+      ctx.fillStyle = '#111';
+      ctx.font = 'bold 12px sans-serif';
+      ctx.fillText(labels[idx], x0 + j * cell + 10, y0 + i * cell + 20);
+      ctx.font = 'bold 22px sans-serif';
+      ctx.fillText(String(v), x0 + j * cell + 10, y0 + i * cell + 58);
+    }
+  }
+  ctx.fillStyle = '#444';
+  ctx.font = '12px sans-serif';
+  ctx.fillText('Predicted', x0 + 55, y0 - 10);
+  ctx.fillText('True', 25, y0 + 60);
+}
+
+function drawHistogram(canvasId, values, correctMask, colors, xLabel) {
+  const c = byId(canvasId);
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  const w = c.width, h = c.height, pad = 34, bins = 16;
+  ctx.clearRect(0, 0, w, h);
+  if (!values || !values.length || !correctMask || !correctMask.length) {
+    clearCanvas(canvasId, 'No histogram data');
+    return;
+  }
+  drawAxes(ctx, w, h, pad, xLabel || 'Value', 'Count');
+  const correctCounts = new Array(bins).fill(0);
+  const incorrectCounts = new Array(bins).fill(0);
+  values.forEach(function(v, i) {
+    const x = Math.max(0, Math.min(0.999999, Number(v)));
+    const b = Math.min(bins - 1, Math.floor(x * bins));
+    if (correctMask[i]) correctCounts[b] += 1; else incorrectCounts[b] += 1;
+  });
+  const maxCount = Math.max(1, ...correctCounts, ...incorrectCounts);
+  const binW = (w - 2 * pad) / bins;
+  for (let i = 0; i < bins; i++) {
+    const x = pad + i * binW;
+    const ch = (correctCounts[i] / maxCount) * (h - 2 * pad);
+    const ih = (incorrectCounts[i] / maxCount) * (h - 2 * pad);
+    ctx.fillStyle = (colors && colors.correct) || '#2ca02c';
+    ctx.fillRect(x + 2, h - pad - ch, (binW - 6) / 2, ch);
+    ctx.fillStyle = (colors && colors.incorrect) || '#d62728';
+    ctx.fillRect(x + 2 + (binW - 6) / 2, h - pad - ih, (binW - 6) / 2, ih);
+  }
+}
+
+function drawShiftDetailChart(result, metricKey) {
+  const c = byId('shift-detail-chart');
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  const w = c.width, h = c.height, pad = 40;
+  ctx.clearRect(0, 0, w, h);
+  const shiftByMethod = (result && result.shift_ood_by_method) || {};
+  const methods = Object.keys(shiftByMethod);
+  if (!methods.length) {
+    clearCanvas('shift-detail-chart', 'No shift detail data');
+    return;
+  }
+  const conditionSet = new Set();
+  methods.forEach(function(method) {
+    Object.keys(shiftByMethod[method] || {}).forEach(function(k) {
+      if (k !== 'id_s0') conditionSet.add(k);
+    });
+  });
+  const conditions = Array.from(conditionSet).sort();
+  if (!conditions.length) {
+    clearCanvas('shift-detail-chart', 'No shift conditions');
+    return;
+  }
+  drawAxes(ctx, w, h, pad, 'Condition', metricKey);
+  const colors = ['#1f77b4', '#d62728', '#2ca02c'];
+  const ymax = conditions.reduce(function(acc, cond) {
+    methods.forEach(function(method) {
+      const v = Number((((shiftByMethod[method] || {})[cond] || {})[metricKey]) || 0);
+      if (isFinite(v)) acc = Math.max(acc, v);
+    });
+    return acc;
+  }, 0.1);
+  const groupWidth = (w - 2 * pad) / conditions.length;
+  const barWidth = Math.min(20, (groupWidth - 10) / Math.max(1, methods.length));
+  conditions.forEach(function(cond, ci) {
+    ctx.fillStyle = '#666';
+    ctx.font = '10px sans-serif';
+    ctx.save();
+    ctx.translate(pad + ci * groupWidth + 8, h - 8);
+    ctx.rotate(-0.45);
+    ctx.fillText(cond, 0, 0);
+    ctx.restore();
+    methods.forEach(function(method, mi) {
+      const v = Number((((shiftByMethod[method] || {})[cond] || {})[metricKey]) || 0);
+      if (!isFinite(v)) return;
+      const bh = (v / ymax) * (h - 2 * pad);
+      const x = pad + ci * groupWidth + 4 + mi * barWidth;
+      const y = h - pad - bh;
+      ctx.fillStyle = colors[mi % colors.length];
+      ctx.fillRect(x, y, barWidth - 2, bh);
+    });
+  });
+  methods.forEach(function(method, i) {
+    const lx = pad + i * 120;
+    ctx.fillStyle = colors[i % colors.length];
+    ctx.fillRect(lx, 10, 14, 10);
+    ctx.fillStyle = '#333';
+    ctx.font = '11px sans-serif';
+    ctx.fillText(method, lx + 20, 19);
+  });
+}
+
+function progressSet(p, text) {
+  byId('progress-bar').style.width = Math.max(0, Math.min(100, p * 100)) + '%';
+  byId('progress-text').textContent = text || 'Running...';
+}
+
+function appendLog(text) {
+  const el = byId('live-log');
+  el.textContent += (el.textContent.trim() ? '\n' : '') + text;
+  el.scrollTop = el.scrollHeight;
+}
+
+function wsUrl(path) {
+  const proto = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+  return proto + window.location.host + path;
+}
+
+function populateRuns() {
+  const sel = byId('run-select');
+  fetch('/api/train/runs').then(r => r.json()).then(function(d) {
+    (d.runs || []).forEach(function(run) {
+      const opt = document.createElement('option');
+      opt.value = run.run_id || '';
+      opt.textContent = (run.run_id || '—') + (run.best_val_acc != null ? ' (val ' + (run.best_val_acc * 100).toFixed(1) + '%)' : '');
+      sel.appendChild(opt);
+    });
+    refreshEnsembleCandidates();
+  }).catch(function() {
+    refreshEnsembleCandidates();
+  });
+}
+
+function selectedEnsembleRunIds() {
+  const wrap = byId(bundleEnsemblePickerId());
+  if (!wrap) return [];
+  return Array.from(wrap.querySelectorAll('input[type="checkbox"][data-role="bundle-ensemble-member"]:checked')).map(function(input) {
+    return (input.value || '').trim();
+  }).filter(Boolean);
+}
+
+function recipeSummary(recipe) {
+  if (!recipe) return 'unknown recipe';
+  const parts = [];
+  if (recipe.model_id) parts.push(recipe.model_id);
+  if (recipe.dataset) parts.push(recipe.dataset);
+  if (recipe.epochs != null) parts.push('e' + recipe.epochs);
+  if (recipe.n_train != null) parts.push('nt' + recipe.n_train);
+  if (recipe.n_val != null) parts.push('nv' + recipe.n_val);
+  if (recipe.batch_size != null) parts.push('bs' + recipe.batch_size);
+  if (recipe.lr != null) parts.push('lr ' + recipe.lr);
+  return parts.join(' | ');
+}
+
+function formatEnsembleRunOption(run) {
+  const bits = [run.run_id || 'run'];
+  if (run.best_val_acc != null) bits.push('val ' + (Number(run.best_val_acc) * 100).toFixed(1) + '%');
+  if (run.epochs != null) bits.push('e' + run.epochs);
+  if (run.n_train != null && run.n_val != null) bits.push('nt' + run.n_train + '/nv' + run.n_val);
+  if (run.batch_size != null) bits.push('bs' + run.batch_size);
+  return bits.join(' | ');
+}
+
+function sectionEnsembleStorageKey(section) {
+  return 'evaluate.section.ensemble.' + section + '.' + (byId('run-select').value || 'run-default');
+}
+
+function getSectionEnsembleSelection(section) {
+  const key = sectionEnsembleStorageKey(section);
+  if (Object.prototype.hasOwnProperty.call(sectionEnsembleSelections, key)) return (sectionEnsembleSelections[key] || []).slice();
+  let parsed = [];
+  try {
+    parsed = JSON.parse(window.localStorage.getItem(key) || '[]');
+  } catch (e) {
+    parsed = [];
+  }
+  if (!Array.isArray(parsed)) parsed = [];
+  sectionEnsembleSelections[key] = parsed.filter(Boolean);
+  return sectionEnsembleSelections[key].slice();
+}
+
+function setSectionEnsembleSelection(section, ids) {
+  const key = sectionEnsembleStorageKey(section);
+  const unique = Array.from(new Set((ids || []).filter(Boolean)));
+  sectionEnsembleSelections[key] = unique;
+  try {
+    window.localStorage.setItem(key, JSON.stringify(unique));
+  } catch (e) {}
+}
+
+function ensembleCandidateGroups(meta) {
+  if (meta && meta.groups && meta.groups.length) {
+    return meta.groups.map(function(group, idx) {
+      return {
+        label: 'Recipe ' + (idx + 1) + ' | ' + recipeSummary(group.recipe),
+        candidates: group.candidates || []
+      };
+    });
+  }
+  return [{ label: 'Compatible runs', candidates: (meta && meta.candidates) || [] }];
+}
+
+function currentEnsembleCandidateRunIds() {
+  const ids = [];
+  ensembleCandidateGroups(currentEnsembleCandidates || {}).forEach(function(group) {
+    (group.candidates || []).forEach(function(run) {
+      const runId = (run.run_id || '').trim();
+      if (runId) ids.push(runId);
+    });
+  });
+  return Array.from(new Set(ids));
+}
+
+function updateEnsembleSelectionNote() {
+  const selected = selectedEnsembleRunIds();
+  const includeEns = byId('bundle-include-ens').value === '1';
+  const sizeRequested = parseInt(byId('bundle-ensemble-size').value || '2', 10);
+  const meta = currentEnsembleCandidates || {};
+  const recipe = recipeSummary(meta.recipe);
+  if (!includeEns) {
+    setText('bundle-ensemble-note', 'Deep ensemble is disabled. The shared bundle member list will be ignored until you enable it again.');
+    return;
+  }
+  if (sizeRequested < 2) {
+    setText('bundle-ensemble-note', 'Deep ensemble requires at least 2 models. Increase the requested ensemble size before running the full bundle.');
+    return;
+  }
+  if (selected.length >= 2) {
+    setText('bundle-ensemble-note', 'Run all will use these explicitly selected run(s): ' + selected.join(', ') + '. Requested size: ' + sizeRequested + '. Recipe: ' + recipe + '.');
+    return;
+  }
+  if (selected.length === 1) {
+    setText('bundle-ensemble-note', 'Select at least 2 compatible runs if you want Run all to use explicit ensemble members. With fewer than 2, the backend can still auto-resolve compatible runs.');
+    return;
+  }
+  if (meta && meta.ok === false) {
+    setText('bundle-ensemble-note', 'No compatible deep-ensemble candidates available: ' + (meta.error || 'unknown error'));
+    return;
+  }
+  const rec = (meta.recommended_run_ids || []);
+  if (rec.length >= 2) {
+    setText('bundle-ensemble-note', 'No explicit bundle members selected. Run all can auto-resolve a compatible ensemble of size ' + Math.max(2, sizeRequested) + '. Recommended runs: ' + rec.join(', ') + '. Recipe: ' + recipe + '.');
+    return;
+  }
+  setText('bundle-ensemble-note', 'No explicit bundle members selected yet. If you choose compatible runs here, Run all will use exactly those checkpoints. Recipe context: ' + recipe + '.');
+}
+
+function selectedSectionEnsembleRunIds(section) {
+  const available = new Set(currentEnsembleCandidateRunIds());
+  return getSectionEnsembleSelection(section).filter(function(id) { return available.has(id); });
+}
+
+function selectionSummaryText(selected, sizeRequested, noun) {
+  if (!selected.length) return 'No ' + noun + ' selected';
+  if (selected.length === sizeRequested) return selected.length + ' of ' + sizeRequested + ' ' + noun + ' selected';
+  return selected.length + ' ' + noun + ' selected';
+}
+
+function updateBundleEnsemblePickerSummary() {
+  const el = byId('bundle-ensemble-picker-summary');
+  if (!el) return;
+  const sizeRequested = Math.max(2, parseInt(byId('bundle-ensemble-size').value || '2', 10));
+  el.textContent = 'Expand run picker (' + selectionSummaryText(bundleEnsembleSelection, sizeRequested, 'runs') + ')';
+}
+
+function syncBundleEnsembleCheckboxState() {
+  const wrap = byId(bundleEnsemblePickerId());
+  if (!wrap) return;
+  const sizeRequested = Math.max(2, parseInt(byId('bundle-ensemble-size').value || '2', 10));
+  const boxes = Array.from(wrap.querySelectorAll('input[type="checkbox"][data-role="bundle-ensemble-member"]'));
+  const checkedCount = boxes.filter(function(box) { return box.checked; }).length;
+  boxes.forEach(function(box) {
+    box.disabled = !box.checked && checkedCount >= sizeRequested;
+  });
+}
+
+function renderBundleEnsemblePicker() {
+  const wrap = byId(bundleEnsemblePickerId());
+  if (!wrap) return;
+  const sizeRequested = Math.max(2, parseInt(byId('bundle-ensemble-size').value || '2', 10));
+  const groups = ensembleCandidateGroups(currentEnsembleCandidates || {});
+  const availableIds = new Set(currentEnsembleCandidateRunIds());
+  bundleEnsembleSelection = (bundleEnsembleSelection || []).filter(function(id) { return availableIds.has(id); });
+  const recommended = ((currentEnsembleCandidates || {}).recommended_run_ids || []).slice(0, sizeRequested);
+  const preferred = bundleEnsembleSelection.length ? bundleEnsembleSelection : recommended.filter(function(id) { return availableIds.has(id); });
+  bundleEnsembleSelection = preferred.slice();
+  setHtml(bundleEnsemblePickerId(),
+    '<details style="border:1px dashed var(--border);border-radius:8px;background:var(--bg);padding:0.35rem 0.65rem;">' +
+      '<summary id="bundle-ensemble-picker-summary" style="cursor:pointer;list-style:none;font-weight:600;">Expand run picker (' + selectionSummaryText(preferred, sizeRequested, 'runs') + ')</summary>' +
+      '<div style="margin-top:0.6rem;color:var(--text-secondary);font-size:0.86rem;">Check compatible runs one by one for `Run all`.</div>' +
+      '<div style="margin-top:0.6rem;"><button class="btn" id="btn-refresh-ensemble-members" type="button">Refresh compatible models</button></div>' +
+      '<div style="margin-top:0.75rem;display:flex;flex-direction:column;gap:0.75rem;max-height:18rem;overflow:auto;padding-right:0.25rem;">' +
+        groups.map(function(group) {
+          return '<div style="border:1px solid var(--border);border-radius:6px;padding:0.65rem;background:var(--bg-subtle);">' +
+            '<div style="font-size:0.85rem;font-weight:600;margin-bottom:0.5rem;">' + group.label + '</div>' +
+            ((group.candidates || []).length
+              ? (group.candidates || []).map(function(run) {
+                  const runId = (run.run_id || '').trim();
+                  const checked = preferred.indexOf(runId) >= 0 ? ' checked' : '';
+                  return '<label style="display:block;margin-top:0.35rem;cursor:pointer;"><input type="checkbox" data-role="bundle-ensemble-member" value="' + runId + '"' + checked + '> <span style="margin-left:0.35rem;">' + formatEnsembleRunOption(run) + '</span></label>';
+                }).join('')
+              : '<div style="color:var(--text-secondary);font-size:0.85rem;">No compatible runs in this recipe.</div>') +
+          '</div>';
+        }).join('') +
+      '</div>' +
+    '</details>'
+  );
+  const refreshBtn = byId('btn-refresh-ensemble-members');
+  if (refreshBtn) refreshBtn.addEventListener('click', refreshEnsembleCandidates);
+  Array.from(wrap.querySelectorAll('input[type="checkbox"][data-role="bundle-ensemble-member"]')).forEach(function(box) {
+    box.addEventListener('change', function() {
+      bundleEnsembleSelection = selectedEnsembleRunIds();
+      syncBundleEnsembleCheckboxState();
+      updateBundleEnsemblePickerSummary();
+      updateEnsembleSelectionNote();
+    });
+  });
+  syncBundleEnsembleCheckboxState();
+  updateBundleEnsemblePickerSummary();
+}
+
+function syncSectionEnsembleCheckboxState(section) {
+  const wrap = byId(sectionEnsemblePickerId(section));
+  if (!wrap) return;
+  const sizeRequested = Math.max(2, parseInt(byId('bundle-ensemble-size').value || '2', 10));
+  const boxes = Array.from(wrap.querySelectorAll('input[type="checkbox"][data-role="section-ensemble-member"]'));
+  const checkedCount = boxes.filter(function(box) { return box.checked; }).length;
+  boxes.forEach(function(box) {
+    box.disabled = !box.checked && checkedCount >= sizeRequested;
+  });
+}
+
+function updateSectionEnsembleSelectionNote(section) {
+  const includeEns = byId('bundle-include-ens').value === '1';
+  const sizeRequested = Math.max(2, parseInt(byId('bundle-ensemble-size').value || '2', 10));
+  const selected = selectedSectionEnsembleRunIds(section);
+  const meta = currentEnsembleCandidates || {};
+  const recipe = recipeSummary(meta.recipe);
+  if (!includeEns) {
+    setText(sectionEnsembleNoteId(section), 'Deep ensemble is disabled globally, so this section will ignore its remembered checklist until you enable it again.');
+    return;
+  }
+  if (meta && meta.ok === false) {
+    setText(sectionEnsembleNoteId(section), 'No compatible deep-ensemble candidates are available for this section: ' + (meta.error || 'unknown error'));
+    return;
+  }
+  if (!currentEnsembleCandidateRunIds().length) {
+    setText(sectionEnsembleNoteId(section), 'Loading compatible deep-ensemble candidates for this section...');
+    return;
+  }
+  if (selected.length === sizeRequested) {
+    setText(sectionEnsembleNoteId(section), 'This section remembers these ' + selected.length + ' checked model(s): ' + selected.join(', ') + '. Recipe: ' + recipe + '.');
+    return;
+  }
+  const rec = (meta.recommended_run_ids || []).slice(0, sizeRequested);
+  const recText = rec.length ? (' Recommended: ' + rec.join(', ') + '.') : '';
+  setText(sectionEnsembleNoteId(section), 'Check exactly ' + sizeRequested + ' model(s) for this section. Currently checked: ' + selected.length + '. The checked set is remembered separately for this section.' + recText);
+}
+
+function renderSectionEnsemblePicker(section) {
+  const wrap = byId(sectionEnsemblePickerId(section));
+  if (!wrap) return;
+  const sizeRequested = Math.max(2, parseInt(byId('bundle-ensemble-size').value || '2', 10));
+  const groups = ensembleCandidateGroups(currentEnsembleCandidates || {});
+  const availableIds = new Set(currentEnsembleCandidateRunIds());
+  let remembered = getSectionEnsembleSelection(section).filter(function(id) { return availableIds.has(id); });
+  if (!remembered.length) {
+    remembered = ((currentEnsembleCandidates || {}).recommended_run_ids || []).slice(0, sizeRequested).filter(function(id) { return availableIds.has(id); });
+    if (remembered.length) setSectionEnsembleSelection(section, remembered);
+  } else if (remembered.length > sizeRequested) {
+    remembered = remembered.slice(0, sizeRequested);
+    setSectionEnsembleSelection(section, remembered);
+  }
+  setHtml(sectionEnsemblePickerId(section),
+    '<details style="border:1px dashed var(--border);border-radius:8px;background:var(--bg);padding:0.35rem 0.65rem;">' +
+      '<summary style="cursor:pointer;list-style:none;font-weight:600;">Expand model picker (' + selectionSummaryText(remembered, sizeRequested, 'models') + ')</summary>' +
+      '<div style="margin-top:0.35rem;color:var(--text-secondary);font-size:0.86rem;">Check models one by one. This checklist is remembered independently for the `' + section + '` section.</div>' +
+      '<div style="margin-top:0.6rem;"><button class="btn" id="' + sectionEnsembleRefreshButtonId(section) + '" type="button">Refresh compatible models</button></div>' +
+      '<div style="margin-top:0.75rem;display:flex;flex-direction:column;gap:0.75rem;max-height:18rem;overflow:auto;padding-right:0.25rem;">' +
+        groups.map(function(group) {
+          return '<div style="border:1px solid var(--border);border-radius:6px;padding:0.65rem;background:var(--bg-subtle);">' +
+            '<div style="font-size:0.85rem;font-weight:600;margin-bottom:0.5rem;">' + group.label + '</div>' +
+            ((group.candidates || []).length
+              ? (group.candidates || []).map(function(run) {
+                  const runId = (run.run_id || '').trim();
+                  const checked = remembered.indexOf(runId) >= 0 ? ' checked' : '';
+                  return '<label style="display:block;margin-top:0.35rem;cursor:pointer;"><input type="checkbox" data-role="section-ensemble-member" data-section="' + section + '" value="' + runId + '"' + checked + '> <span style="margin-left:0.35rem;">' + formatEnsembleRunOption(run) + '</span></label>';
+                }).join('')
+              : '<div style="color:var(--text-secondary);font-size:0.85rem;">No compatible runs in this recipe.</div>') +
+          '</div>';
+        }).join('') +
+      '</div>' +
+      '<div id="' + sectionEnsembleNoteId(section) + '" style="margin-top:0.6rem;color:var(--text-secondary);font-size:0.85rem;"></div>' +
+    '</details>'
+  );
+  const refreshBtn = byId(sectionEnsembleRefreshButtonId(section));
+  if (refreshBtn) refreshBtn.addEventListener('click', refreshEnsembleCandidates);
+  Array.from(wrap.querySelectorAll('input[type="checkbox"][data-role="section-ensemble-member"]')).forEach(function(box) {
+    box.addEventListener('change', function() {
+      const checkedIds = Array.from(wrap.querySelectorAll('input[type="checkbox"][data-role="section-ensemble-member"]:checked')).map(function(input) {
+        return (input.value || '').trim();
+      }).filter(Boolean);
+      setSectionEnsembleSelection(section, checkedIds);
+      syncSectionEnsembleCheckboxState(section);
+      updateSectionEnsembleSelectionNote(section);
+    });
+  });
+  syncSectionEnsembleCheckboxState(section);
+  updateSectionEnsembleSelectionNote(section);
+}
+
+function renderAllSectionEnsemblePickers() {
+  SECTION_KEYS.forEach(renderSectionEnsemblePicker);
+}
+
+function refreshEnsembleCandidates() {
+  const previous = selectedEnsembleRunIds();
+  bundleEnsembleSelection = previous.slice();
+  currentEnsembleCandidates = null;
+  const params = new URLSearchParams({
+    ensemble_size: String(Math.max(2, parseInt(byId('bundle-ensemble-size').value || '2', 10)))
+  });
+  const runId = byId('run-select').value;
+  if (runId) params.set('run_id', runId);
+  setText('bundle-ensemble-note', 'Loading compatible deep-ensemble candidates...');
+  renderBundleEnsemblePicker();
+  renderAllSectionEnsemblePickers();
+  fetch('/api/evaluate/deep-ensemble/candidates?' + params.toString())
+    .then(r => r.json())
+    .then(function(d) {
+      currentEnsembleCandidates = d || {};
+      bundleEnsembleSelection = (previous.length ? previous : ((d && d.recommended_run_ids) || [])).slice();
+      renderBundleEnsemblePicker();
+      updateEnsembleSelectionNote();
+      renderAllSectionEnsemblePickers();
+    })
+    .catch(function(err) {
+      currentEnsembleCandidates = { ok: false, error: err.message || 'request failed' };
+      renderBundleEnsemblePicker();
+      updateEnsembleSelectionNote();
+      renderAllSectionEnsemblePickers();
+    });
+}
+
+function renderSavedBundlePreview(name) {
+  const entry = currentSavedBundles.find(function(file) { return file.name === name; }) || currentSavedBundles[0] || null;
+  if (!entry) {
+    setText('saved-bundle-preview', 'No saved bundle is available for the current run and split.');
+    return;
+  }
+  const meta = entry.metadata || {};
+  const preview = entry.preview || {};
+  const figures = (preview.summary_figures || []).length ? preview.summary_figures.join(', ') : 'none';
+  const methodReports = (preview.method_reports || []).length ? (preview.method_reports || []).map(methodLabel).join(', ') : 'none';
+  setText(
+    'saved-bundle-preview',
+    'Latest matching bundle: ' + entry.name +
+    '\nUpdated: ' + fmtStamp(entry.modified_ts) +
+    '\nRun: ' + (meta.run_id || 'default') + ' | Model: ' + (meta.model_id || 'n/a') + ' | Split: ' + (meta.split || 'n/a') +
+    '\nMethods: ' + ((meta.methods || []).map(methodLabel).join(', ') || 'n/a') +
+    '\nReport package: ' + (preview.has_report_manifest ? 'available' : 'missing') +
+    '\nSummary figures: ' + figures +
+    '\nDetailed method reports: ' + methodReports
+  );
+}
+
+function renderSavedSectionPreview(section, name) {
+  const files = currentSavedSections[section] || [];
+  const entry = files.find(function(file) { return file.name === name; }) || files[0] || null;
+  if (!entry) {
+    setText(sectionNoteId(section), 'No saved ' + section.replace('_', ' ') + ' result is available for the current run and split.');
+    return;
+  }
+  const meta = entry.metadata || {};
+  setText(
+    sectionNoteId(section),
+    'Latest saved ' + section.replace('_', ' ') + ' result: ' + entry.name +
+    ' | updated ' + fmtStamp(entry.modified_ts) +
+    ' | methods: ' + ((meta.methods || []).map(methodLabel).join(', ') || 'n/a')
+  );
+}
+
+function refreshSavedBundles() {
+  const params = new URLSearchParams({action: 'list', kind: 'bundle'});
+  const runId = byId('run-select').value;
+  const split = byId('bundle-split').value;
+  if (runId) params.set('run_id', runId);
+  if (split) params.set('split', split);
+  fetch('/api/evaluate/results?' + params.toString()).then(r => r.json()).then(function(d) {
+    const sel = byId('saved-bundle-select');
+    currentSavedBundles = (d.files || []);
+    sel.innerHTML = '<option value="">No saved bundle selected</option>';
+    currentSavedBundles.forEach(function(file) {
+      const opt = document.createElement('option');
+      const meta = file.metadata || {};
+      const methods = (meta.methods || []).map(methodLabel).join(', ') || 'bundle';
+      opt.value = file.name;
+      opt.textContent = (meta.run_id || 'default') + ' | ' + (meta.model_id || 'model') + ' | ' + (meta.split || 'split') + ' | ' + methods;
+      sel.appendChild(opt);
+    });
+    if (currentSavedBundles.length) sel.value = currentSavedBundles[0].name;
+    byId('saved-bundle-note').textContent = currentSavedBundles.length
+      ? ('Found ' + currentSavedBundles.length + ' saved bundle result(s) for the current selection.')
+      : 'No saved bundle found yet for the current selection.';
+    renderSavedBundlePreview(sel.value);
+  }).catch(function() {
+    byId('saved-bundle-note').textContent = 'Could not load saved bundle list.';
+    setText('saved-bundle-preview', 'Saved bundle preview could not be loaded.');
+  });
+}
+
+function refreshSavedSection(section) {
+  const params = new URLSearchParams({action: 'list', kind: 'section_compare', section: section});
+  const runId = byId('run-select').value;
+  const split = byId('bundle-split').value;
+  if (runId) params.set('run_id', runId);
+  if (split) params.set('split', split);
+  fetch('/api/evaluate/results?' + params.toString()).then(r => r.json()).then(function(d) {
+    const sel = byId(sectionSelectId(section));
+    currentSavedSections[section] = d.files || [];
+    sel.innerHTML = '<option value="">No saved result selected</option>';
+    currentSavedSections[section].forEach(function(file) {
+      const opt = document.createElement('option');
+      const meta = file.metadata || {};
+      opt.value = file.name;
+      opt.textContent = (meta.run_id || 'default') + ' | ' + (meta.model_id || 'model') + ' | ' + fmtStamp(file.modified_ts);
+      sel.appendChild(opt);
+    });
+    if (currentSavedSections[section].length) sel.value = currentSavedSections[section][0].name;
+    renderSavedSectionPreview(section, sel.value);
+  }).catch(function() {
+    setText(sectionNoteId(section), 'Saved section results could not be loaded.');
+  });
+}
+
+function refreshAllSavedSections() {
+  ['performance', 'calibration', 'uncertainty', 'selective', 'pathology', 'shift'].forEach(refreshSavedSection);
+}
+
+function bundlePayload() {
+  const payload = {
+    split: byId('bundle-split').value,
+    max_samples: parseInt(byId('bundle-max-samples').value || '256', 10),
+    batch_size: parseInt(byId('bundle-batch-size').value || '64', 10),
+    mc_samples: parseInt(byId('bundle-mc-samples').value || '30', 10),
+    fit_temperature_on_val: byId('bundle-fit-temp').value === '1',
+    fit_deferral_on_val: byId('bundle-fit-deferral').value === '1',
+    shift_severities: (byId('bundle-shift-sev').value || '1,3,5').trim(),
+    ensemble_size: parseInt(byId('bundle-ensemble-size').value || '2', 10),
+    include_deep_ensemble: byId('bundle-include-ens').value === '1'
+  };
+  const ensembleRunIds = selectedEnsembleRunIds();
+  if (payload.include_deep_ensemble && ensembleRunIds.length >= 2) {
+    payload.ensemble_run_ids = ensembleRunIds;
+    payload.ensemble_size = ensembleRunIds.length;
+  }
+  const runId = byId('run-select').value;
+  if (runId) payload.run_id = runId;
+  return payload;
+}
+
+function loadDetailedMetrics(manifest) {
+  const reports = (manifest && manifest.method_reports) || {};
+  const methods = Object.keys(reports);
+  return Promise.all(methods.map(function(method) {
+    const metricsPath = ((reports[method] || {}).metrics_path) || '';
+    if (!metricsPath) return Promise.resolve(null);
+    return fetch(artifactUrl(metricsPath))
+      .then(r => r.json())
+      .then(function(d) {
+        return { method: method, result: d || {} };
+      })
+      .catch(function() { return null; });
+  })).then(function(items) {
+    return items.filter(Boolean);
+  });
+}
+
+function loadReportManifest(result) {
+  const manifestPath = (((result || {}).outputs || {}).report_manifest) || '';
+  if (!manifestPath) return Promise.resolve(null);
+  return fetch(artifactUrl(manifestPath))
+    .then(r => r.json())
+    .catch(function() { return null; });
+}
+
+function renderCoreTable(result) {
+  const tbody = document.querySelector('#core-metrics-table tbody');
+  const pipeline = result.pipeline || {};
+  const methods = Object.keys(pipeline);
+  if (!methods.length) {
+    tbody.innerHTML = '<tr><td colspan="9">No pipeline results.</td></tr>';
+    return methods;
+  }
+  tbody.innerHTML = methods.map(function(method) {
+    const block = pipeline[method] || {};
+    const perf = block.predictive_performance || {};
+    const cal = block.calibration || {};
+    const sel = block.selective_prediction || {};
+    return '<tr>' +
+      '<td class="mono">' + method + '</td>' +
+      '<td>' + fmtPct(perf.accuracy) + '</td>' +
+      '<td>' + fmt4(perf.roc_auc) + '</td>' +
+      '<td>' + fmt4(perf.pr_auc) + '</td>' +
+      '<td>' + fmtPct(perf.sensitivity) + '</td>' +
+      '<td>' + fmtPct(perf.specificity) + '</td>' +
+      '<td>' + fmt4(cal.ece) + '</td>' +
+      '<td>' + fmt4(cal.brier) + '</td>' +
+      '<td>' + fmt4(sel.aurc) + '</td>' +
+    '</tr>';
+  }).join('');
+  return methods;
+}
+
+function _conditionPreviewUrl(key, idx) {
+  var m = key.match(/^([a-z]+)_s(\d+)$/);
+  if (!m || m[1] === 'id') return '/api/dataset/test/sample/' + (idx || 42);
+  return '/api/dataset/test/sample/' + (idx || 42) + '/corrupted?shift=' + m[1] + '&severity=' + m[2] + '&size=96';
+}
+function _conditionSeverityBorder(key) {
+  var m = key.match(/^([a-z]+)_s(\d+)$/);
+  if (!m || m[1] === 'id') return '2px solid var(--accent,#5b8dee)';
+  var sev = parseInt(m[2], 10);
+  if (sev <= 1) return '2px solid #4caf6e';
+  if (sev <= 3) return '2px solid #e6a817';
+  return '2px solid #e05252';
+}
+
+function renderShiftTable(result) {
+  const tbody = document.querySelector('#shift-summary-table tbody');
+  const grouped = result.shift_ood_grouped_by_method || {};
+  const byMethod = result.shift_ood_by_method || {};
+  const methods = Object.keys(grouped);
+  if (!methods.length) {
+    tbody.innerHTML = '<tr><td colspan="6">No shift summary.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = methods.map(function(method) {
+    const near = ((grouped[method] || {}).near_ood || {});
+    return '<tr>' +
+      '<td class="mono">' + method + '</td>' +
+      '<td>' + (near.n_conditions != null ? near.n_conditions : 'n/a') + '</td>' +
+      '<td>' + fmt4(near.mean_ood_auroc) + '</td>' +
+      '<td>' + fmt4(near.mean_ood_auprc) + '</td>' +
+      '<td>' + fmt4(near.mean_accuracy) + '</td>' +
+      '<td>' + fmt4(near.mean_ece) + '</td>' +
+    '</tr>';
+  }).join('');
+
+  // ── Per-condition breakdown table with thumbnails ──────────────────────
+  const condRows = [];
+  var seenKeys = {};
+  methods.forEach(function(method) {
+    Object.keys(byMethod[method] || {}).sort().forEach(function(key) {
+      seenKeys[key] = true;
+      const row = (byMethod[method] || {})[key] || {};
+      var url = _conditionPreviewUrl(key, 42);
+      var border = _conditionSeverityBorder(key);
+      var thumb = '<img src="' + url + '" width="56" height="56" style="display:block;border-radius:3px;border:' + border + ';background:#222;" loading="lazy" title="' + key + '">';
+      condRows.push('<tr>'
+        + '<td style="padding:3px 6px;vertical-align:middle;">' + thumb + '</td>'
+        + '<td class="mono">' + method + ' / ' + key + '</td>'
+        + '<td>' + fmt4(row.accuracy) + '</td>'
+        + '<td>' + fmt4(row.ece) + '</td>'
+        + '<td>' + fmt4(row.mean_uncertainty) + '</td>'
+        + '<td>' + fmt4(row.ood_detection_auroc) + '</td>'
+        + '<td>' + fmt4(row.ood_detection_auprc) + '</td>'
+        + '</tr>');
+    });
+  });
+  var bundleCondTbody = document.querySelector('#bundle-cond-table tbody');
+  var bundleCondWrap = document.getElementById('bundle-cond-table-wrap');
+  if (bundleCondTbody) {
+    bundleCondTbody.innerHTML = condRows.length ? condRows.join('') : '<tr><td colspan="7">No condition data in bundle.</td></tr>';
+    if (bundleCondWrap) bundleCondWrap.style.display = condRows.length ? 'block' : 'none';
+  }
+  // ── Filter strip ──────────────────────────────────────────────────────
+  var uniqueKeys = Object.keys(seenKeys).sort();
+  var stripEl = document.getElementById('bundle-cond-strip');
+  var stripInner = document.getElementById('bundle-cond-strip-inner');
+  if (stripEl && stripInner && uniqueKeys.length > 0) {
+    var LABEL_MAP = { id: 'Original', blur: 'Blur', noise: 'Noise', jpeg: 'JPEG', color: 'Color' };
+    var grouped2 = {};
+    uniqueKeys.forEach(function(key) {
+      var m = key.match(/^([a-z]+)_s(\d+)$/);
+      if (!m) return;
+      if (!grouped2[m[1]]) grouped2[m[1]] = [];
+      grouped2[m[1]].push({ key: key, severity: parseInt(m[2], 10) });
+    });
+    var stripHtml = '';
+    Object.keys(grouped2).sort().forEach(function(shift) {
+      var items = grouped2[shift].sort(function(a, b) { return a.severity - b.severity; });
+      var shiftLabel = LABEL_MAP[shift] || shift;
+      stripHtml += '<div style="display:inline-flex;flex-direction:column;align-items:center;gap:4px;">';
+      stripHtml += '<div style="font-size:0.78rem;color:var(--accent,#5b8dee);font-weight:600;text-align:center;">' + shiftLabel + '</div>';
+      stripHtml += '<div style="display:flex;gap:4px;">';
+      items.forEach(function(item) {
+        var url = _conditionPreviewUrl(item.key, 42);
+        var border = _conditionSeverityBorder(item.key);
+        var sevLabel = item.severity === 0 ? '—' : 'S' + item.severity;
+        stripHtml += '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;">';
+        stripHtml += '<img src="' + url + '" width="80" height="80" style="display:block;border-radius:4px;border:' + border + ';background:#222;" loading="lazy" title="' + item.key + '">';
+        stripHtml += '<span style="font-size:0.72rem;color:var(--muted);">' + sevLabel + '</span>';
+        stripHtml += '</div>';
+      });
+      stripHtml += '</div></div>';
+    });
+    stripInner.innerHTML = stripHtml;
+    stripEl.style.display = 'block';
+  }
+}
+
+function figureKeyForShiftMetric(metricKey) {
+  const map = {
+    ood_detection_auroc: 'shift_detail_ood_auroc',
+    ood_detection_auprc: 'shift_detail_ood_auprc',
+    accuracy: 'shift_detail_accuracy',
+    ece: 'shift_detail_ece'
+  };
+  return map[metricKey] || 'shift_detail_ood_auroc';
+}
+
+function renderSummaryFigures(manifest) {
+  const figs = (manifest && manifest.summary_figures) || {};
+  setFigure('benchmark-summary-img', figs.benchmark_summary_metrics, 'Benchmark summary');
+  setFigure('reliability-img', figs.benchmark_reliability_comparison, 'Reliability comparison');
+  setFigure('risk-coverage-img', figs.benchmark_risk_coverage_comparison, 'Risk-coverage comparison');
+  setFigure('shift-summary-img', figs.shift_detail_ood_auroc, 'Shift OOD comparison');
+  byId('figure-source-note').textContent = manifest
+    ? 'The report uses saved server-generated figures from this run package.'
+    : 'Report package is not available for this bundle yet.';
+}
+
+function drawBatchConfidence(results) {
+  const c = byId('batch-confidence-chart');
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  const w = c.width, h = c.height, pad = 30;
+  ctx.clearRect(0, 0, w, h);
+  if (!results || !results.length) {
+    clearCanvas('batch-confidence-chart', 'No batch data');
+    return;
+  }
+  drawAxes(ctx, w, h, pad, 'Sample', 'Confidence');
+  const step = (w - 2 * pad) / results.length;
+  results.forEach(function(r, i) {
+    const conf = Number(r.confidence || 0);
+    const bh = conf * (h - 2 * pad);
+    const x = pad + i * step + 4;
+    const y = h - pad - bh;
+    ctx.fillStyle = r.correct ? '#2ca02c' : '#d62728';
+    ctx.fillRect(x, y, Math.max(8, step - 8), bh);
+  });
+}
+
+function renderBatchCorrectness(batch) {
+  const results = (batch && batch.results) || [];
+  const summary = (batch && batch.summary) || {};
+  const tbody = document.querySelector('#batch-table tbody');
+  if (!results.length) {
+    byId('batch-summary').textContent = 'No batch correctness data available.';
+    tbody.innerHTML = '<tr><td colspan="5">No batch results loaded.</td></tr>';
+    clearCanvas('batch-correctness-chart', 'No batch data');
+    clearCanvas('batch-confidence-chart', 'No batch data');
+    return;
+  }
+  const correctCount = results.filter(r => r.correct).length;
+  const incorrectCount = results.length - correctCount;
+  byId('batch-summary').textContent =
+    'Batch spot-check for ' + (batch.method || 'method') +
+    ': accuracy ' + fmtPct(summary.accuracy) +
+    ', mean confidence ' + fmtPct(summary.mean_confidence) +
+    ', ECE ' + fmt4(summary.ece) +
+    ', correct ' + correctCount + '/' + results.length + '.';
+  drawGroupedBars('batch-correctness-chart', ['Correct', 'Incorrect'], [
+    {label: 'Count', color: '#1f77b4', values: [correctCount, incorrectCount]}
+  ], Math.max(results.length, 1), function(v) { return String(Math.round(v)); });
+  drawBatchConfidence(results);
+  tbody.innerHTML = results.map(function(r) {
+    const gt = r.gt === 1 ? 'Metastasis' : 'Normal';
+    const pred = r.pred === 1 ? 'Metastasis' : 'Normal';
+    return '<tr>' +
+      '<td class="mono">' + r.idx + '</td>' +
+      '<td>' + gt + '</td>' +
+      '<td>' + pred + '</td>' +
+      '<td>' + fmtPct(r.confidence) + '</td>' +
+      '<td style="color:' + (r.correct ? 'var(--success)' : 'var(--danger)') + ';font-weight:600;">' + (r.correct ? 'Yes' : 'No') + '</td>' +
+    '</tr>';
+  }).join('');
+}
+
+function populateBatchMethodSelect(methods) {
+  const sel = byId('batch-method-select');
+  const preferred = methods.indexOf('mc_dropout') >= 0 ? 'mc_dropout' : (methods[0] || '');
+  sel.innerHTML = methods.length
+    ? methods.map(function(m) { return '<option value="' + m + '"' + (m === preferred ? ' selected' : '') + '>' + m + '</option>'; }).join('')
+    : '<option value="">No method available</option>';
+}
+
+function loadBatchCorrectness(method) {
+  if (!currentBundleResult || !method) return;
+  const cfg = currentBundleResult.config || {};
+  const params = new URLSearchParams({
+    split: cfg.split || 'test',
+    method: method,
+    n: '16',
+    calibration_bins: '15'
+  });
+  if (cfg.run_id) params.set('run_id', cfg.run_id);
+  if (method === 'mc_dropout') params.set('mc_samples', String(cfg.mc_samples || 30));
+  fetch('/api/evaluate/batch?' + params.toString())
+    .then(r => r.json())
+    .then(function(d) {
+      if (d.error) throw new Error(d.error);
+      renderBatchCorrectness(d);
+    })
+    .catch(function(e) {
+      byId('batch-summary').textContent = 'Batch correctness failed: ' + e.message;
+      clearCanvas('batch-correctness-chart', 'Batch request failed');
+      clearCanvas('batch-confidence-chart', 'Batch request failed');
+    });
+}
+
+function renderDetailedMethodReport(method) {
+  const entry = currentDetailedMetrics.find(function(x) { return x.method === method; }) || null;
+  const methodReport = (((currentReportManifest || {}).method_reports || {})[method]) || {};
+  if (!entry) {
+    byId('detail-summary').textContent = 'Detailed metrics are not available for this method yet.';
+    byId('detail-references').textContent = 'Method-specific references are not available.';
+    byId('report-comments').textContent = 'No detailed comments available.';
+    document.querySelector('#uncertainty-quality-table tbody').innerHTML = '<tr><td colspan="3">No detailed method selected.</td></tr>';
+    document.querySelector('#target-risk-table tbody').innerHTML = '<tr><td colspan="4">No target-risk thresholds loaded.</td></tr>';
+    clearFigure('confusion-img', 'No detailed metrics');
+    clearFigure('temperature-img', 'No detailed metrics');
+    clearFigure('error-roc-img', 'No detailed metrics');
+    clearFigure('error-pr-img', 'No detailed metrics');
+    clearFigure('uncertainty-hist-img', 'No detailed metrics');
+    clearFigure('entropy-hist-img', 'No detailed metrics');
+    clearFigure('shift-detail-img', 'No detailed metrics');
+    return;
+  }
+  const metrics = entry.result || {};
+  const uq = metrics.uncertainty_quality || {};
+  const sel = metrics.selective_prediction || {};
+  const figs = methodReport.figures || {};
+  const explanation = methodReport.explanation || {};
+  setFigure('confusion-img', figs.confusion_matrix, 'Confusion matrix');
+  setFigure('temperature-img', figs.temperature_scaling, 'Calibration before after');
+  setFigure('error-roc-img', figs.error_roc, 'Error ROC');
+  setFigure('error-pr-img', figs.error_pr, 'Error PR');
+  setFigure('uncertainty-hist-img', figs.uncertainty_histogram, 'Uncertainty histogram');
+  setFigure('entropy-hist-img', figs.entropy_histogram, 'Entropy histogram');
+  setFigure('shift-detail-img', ((currentReportManifest || {}).summary_figures || {})[figureKeyForShiftMetric(byId('shift-detail-metric').value || 'ood_detection_auroc')], 'Per-condition shift detail');
+  document.querySelector('#uncertainty-quality-table tbody').innerHTML = [
+    {label: 'Entropy', block: uq.error_detection_entropy || {}},
+    {label: '1 - MSP', block: uq.error_detection_one_minus_msp || {}}
+  ].map(function(row) {
+    return '<tr>' +
+      '<td>' + row.label + '</td>' +
+      '<td>' + fmt4(row.block.auroc) + '</td>' +
+      '<td>' + fmt4(row.block.auprc) + '</td>' +
+    '</tr>';
+  }).join('');
+  const trt = (sel.target_risk_thresholds || []);
+  document.querySelector('#target-risk-table tbody').innerHTML = trt.length
+    ? trt.map(function(row) {
+        return '<tr>' +
+          '<td>' + fmt4(row.target_risk) + '</td>' +
+          '<td>' + fmt4(row.threshold) + '</td>' +
+          '<td>' + fmt4(row.coverage) + '</td>' +
+          '<td>' + fmt4(row.risk) + '</td>' +
+        '</tr>';
+      }).join('')
+    : '<tr><td colspan="4">No target-risk thresholds available.</td></tr>';
+  byId('detail-summary').textContent =
+    'Detailed report for ' + method + ': ' + (explanation.what || 'Saved program-generated figures and metrics are shown for this method.');
+  byId('detail-references').textContent = explanation.references
+    ? ('Method references: ' + explanation.references)
+    : 'Method-specific references are not defined for this selection.';
+  byId('report-comments').textContent =
+    'Why it is used: ' + (explanation.why || 'This method helps compare predictive quality, calibration, and uncertainty usefulness.') +
+    ' Interpretation: ' + (explanation.interpretation || 'Judge it by calibration, error detection, and selective prediction together rather than one score alone.');
+}
+
+function renderDetailedCurves(metricsByMethod) {
+  currentDetailedMetrics = metricsByMethod || [];
+  const detailMethods = metricsByMethod.map(function(x) { return x.method; });
+  const sel = byId('detail-method-select');
+  const preferred = detailMethods.indexOf('mc_dropout') >= 0 ? 'mc_dropout' : (detailMethods[0] || '');
+  sel.innerHTML = detailMethods.length
+    ? detailMethods.map(function(m) { return '<option value="' + m + '"' + (m === preferred ? ' selected' : '') + '>' + m + '</option>'; }).join('')
+    : '<option value="">No method available</option>';
+  if (preferred) {
+    renderDetailedMethodReport(preferred);
+    return;
+  }
+  renderDetailedMethodReport('');
+}
+
+function updateIndividualResultsVisibility() {
+  byId('performance-results-card').style.display = currentTechniqueResults.performance ? 'block' : 'none';
+  byId('calibration-results-card').style.display = currentTechniqueResults.calibration ? 'block' : 'none';
+  byId('uncertainty-results-card').style.display = currentTechniqueResults.uncertainty ? 'block' : 'none';
+  byId('selective-results-card').style.display = currentTechniqueResults.selective ? 'block' : 'none';
+  byId('pathology-results-card').style.display = currentTechniqueResults.pathology ? 'block' : 'none';
+  byId('shift-results-card').style.display = currentTechniqueResults.shift ? 'block' : 'none';
+}
+
+function renderMetricRows(targetSelector, rows) {
+  const tbody = document.querySelector(targetSelector + ' tbody');
+  if (!tbody) return;
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td>No data available.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(function(row) {
+    return '<tr><td>' + row[0] + '</td><td>' + row[1] + '</td></tr>';
+  }).join('');
+}
+
+function methodColors() {
+  return { confidence: '#1f77b4', temperature_scaled: '#ff7f0e', mc_dropout: '#2ca02c', deep_ensemble: '#d62728' };
+}
+
+function compareCorePayload(section) {
+  const payload = {
+    section: section,
+    split: byId('bundle-split').value,
+    max_samples: parseInt(byId('bundle-max-samples').value || '256', 10),
+    batch_size: parseInt(byId('bundle-batch-size').value || '64', 10),
+    mc_samples: parseInt(byId('bundle-mc-samples').value || '30', 10),
+    fit_temperature_on_val: byId('bundle-fit-temp').value === '1',
+    fit_deferral_on_val: byId('bundle-fit-deferral').value === '1',
+    ensemble_size: parseInt(byId('bundle-ensemble-size').value || '2', 10),
+    include_deep_ensemble: byId('bundle-include-ens').value === '1'
+  };
+  const ensembleRunIds = selectedSectionEnsembleRunIds(section);
+  if (payload.include_deep_ensemble && ensembleRunIds.length >= 2) {
+    payload.ensemble_run_ids = ensembleRunIds;
+    payload.ensemble_size = ensembleRunIds.length;
+  }
+  const runId = byId('run-select').value;
+  if (runId) payload.run_id = runId;
+  return payload;
+}
+
+function compareShiftPayload() {
+  const payload = compareCorePayload('shift');
+  payload.shifts = 'id,blur,jpeg,color,noise';
+  payload.severities = (byId('bundle-shift-sev').value || '1,3,5').trim();
+  return payload;
+}
+
+function validateSectionEnsembleSelection(section, payload) {
+  if (!payload || !payload.include_deep_ensemble) return true;
+  const sizeRequested = Math.max(2, parseInt(byId('bundle-ensemble-size').value || '2', 10));
+  const selected = selectedSectionEnsembleRunIds(section);
+  if (selected.length !== sizeRequested) {
+    const msg = 'Before running the ' + section + ' section with deep ensemble, check exactly ' + sizeRequested + ' trained model(s) in this section\'s deep-ensemble list. Currently checked: ' + selected.length + '.';
+    setText(sectionEnsembleNoteId(section), msg);
+    setText('section-run-log', 'Deep ensemble selection required: ' + msg);
+    window.alert(msg);
+    return false;
+  }
+  return window.confirm('Run the ' + section + ' section with deep ensemble using these ' + selected.length + ' model(s)?\n\n' + selected.join('\n'));
+}
+
+function runSectionComparison(section, url, payload, buttonId, onSuccess) {
+  if (!validateSectionEnsembleSelection(section, payload)) return;
+  const btn = byId(buttonId);
+  btn.disabled = true;
+  setText('section-run-log', 'Starting comparison run...');
+  fetch(url, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(payload)
+  }).then(function(r) {
+    return r.json().then(function(d) { return {ok: r.ok, body: d}; });
+  }).then(function(resp) {
+    if (!resp.ok || !resp.body.ok) throw new Error(resp.body.error || 'Request failed');
+    setText('section-run-log', resp.body.log || 'Completed.');
+    onSuccess(resp.body.result || {}, resp.body.output_path || '', resp.body.log || '');
+    refreshSavedSection(section);
+  }).catch(function(err) {
+    setText('section-run-log', 'Error: ' + err.message);
+  }).finally(function() {
+    btn.disabled = false;
+  });
+}
+
+function loadSavedSection(section) {
+  const sel = byId(sectionSelectId(section));
+  const name = sel.value;
+  if (!name) return;
+  fetch('/api/evaluate/results?action=load&name=' + encodeURIComponent(name))
+    .then(r => r.json())
+    .then(function(d) {
+      if (!d.ok) throw new Error(d.error || 'Failed to load saved section result');
+      const renderer = sectionRenderer(section);
+      if (!renderer) throw new Error('No renderer for section ' + section);
+      renderer(d.result || {}, d.path || name, 'Loaded from saved section result.');
+      renderSavedSectionPreview(section, name);
+    })
+    .catch(function(e) {
+      setText(sectionNoteId(section), 'Load failed: ' + e.message);
+    });
+}
+
+function renderPerformanceResult(result, outputPath, logText) {
+  currentTechniqueResults.performance = result || {};
+  const methods = orderedMethodKeys((result || {}).results || {});
+  const figs = (((result || {}).outputs || {}).section_figures) || {};
+  document.querySelector('#core-performance-table tbody').innerHTML = methods.length ? methods.map(function(method) {
+    const perf = ((((result || {}).results || {})[method] || {}).predictive_performance) || {};
+    return '<tr><td class="mono">' + methodLabel(method) + '</td><td>' + fmtPct(perf.accuracy) + '</td><td>' + fmtPct(perf.balanced_accuracy) + '</td><td>' + fmt4(perf.f1) + '</td><td>' + fmt4(perf.roc_auc) + '</td><td>' + fmt4(perf.pr_auc) + '</td><td>' + fmtPct(perf.sensitivity) + '</td><td>' + fmtPct(perf.specificity) + '</td></tr>';
+  }).join('') : '<tr><td colspan="8">No predictive-performance result loaded.</td></tr>';
+  setFigure('performance-thresholded-img', figs.performance_thresholded, 'Thresholded predictive metrics');
+  setFigure('performance-ranking-img', figs.performance_ranking, 'Ranking predictive metrics');
+  const best = bestMethod(methods, function(method) {
+    return (((((result || {}).results || {})[method] || {}).predictive_performance) || {}).accuracy;
+  }, false);
+  setText('performance-result-summary', 'Comparison across methods for plain classification quality on ' + (((result || {}).config || {}).split || 'n/a') + ', split into thresholded metrics and threshold-free ranking metrics.');
+  setText('performance-result-interpretation', best ? ('Interpretation: ' + methodLabel(best.method) + ' currently leads the thresholded comparison by accuracy (' + fmtPct(best.value) + '), while ROC AUC and PR AUC should be read separately as ranking metrics across all thresholds.') : 'Interpretation: no predictive-performance ranking is available yet.');
+  setText('performance-result-source', sectionSourceText(outputPath));
+  setText('performance-json-note', 'Saved summary: ' + (outputPath || 'evaluation/pipeline_summary.json') + '\nLog:\n' + (logText || 'No log available.'));
+  updateIndividualResultsVisibility();
+}
+
+function renderCalibrationResult(result, outputPath, logText) {
+  currentTechniqueResults.calibration = result || {};
+  const methods = orderedMethodKeys((result || {}).results || {});
+  const figs = (((result || {}).outputs || {}).section_figures) || {};
+  document.querySelector('#core-calibration-table tbody').innerHTML = methods.length ? methods.map(function(method) {
+    const block = (((result || {}).results || {})[method] || {});
+    const cal = block.calibration || {};
+    const temp = (block.calibration_report || {}).temperature_scaling || {};
+    return '<tr><td class="mono">' + methodLabel(method) + '</td><td>' + fmt4(cal.ece) + '</td><td>' + fmt4(cal.nll) + '</td><td>' + fmt4(cal.brier) + '</td><td>' + fmt4(temp.temperature) + '</td><td>' + fmt4(((temp.calibrated || {}).ece)) + '</td></tr>';
+  }).join('') : '<tr><td colspan="6">No calibration result loaded.</td></tr>';
+  setFigure('calibration-metrics-img', figs.calibration_metrics, 'Calibration metrics summary');
+  setFigure('calibration-reliability-img', figs.calibration_reliability, 'Calibration reliability comparison');
+  const best = bestMethod(methods, function(method) {
+    return ((((result || {}).results || {})[method] || {}).calibration || {}).ece;
+  }, true);
+  setText('calibration-result-summary', 'Formal calibration comparison across methods, including reliability and temperature scaling.');
+  setText('calibration-result-interpretation', best ? ('Interpretation: ' + methodLabel(best.method) + ' currently yields the lowest reported calibration error in this section (' + fmt4(best.value) + ').') : 'Interpretation: no calibration ranking is available yet.');
+  setText('calibration-result-source', sectionSourceText(outputPath));
+  setText('calibration-json-note', 'Saved summary: ' + (outputPath || 'evaluation/pipeline_summary.json') + '\nLog:\n' + (logText || 'No log available.'));
+  updateIndividualResultsVisibility();
+}
+
+function renderUncertaintyResult(result, outputPath, logText) {
+  currentTechniqueResults.uncertainty = result || {};
+  const methods = orderedMethodKeys((result || {}).results || {});
+  const figs = (((result || {}).outputs || {}).section_figures) || {};
+  function uncertaintyPrimary(block) {
+    const uq = (block || {}).uncertainty_quality || {};
+    const disagreement = uq.distributional_disagreement || {};
+    const primaryScore = disagreement.primary_score || '';
+    const scoreBlock = primaryScore && disagreement.scores ? disagreement.scores[primaryScore] : null;
+    const primaryErr = (scoreBlock || {}).error_detection || {};
+    if (primaryScore && (primaryErr.auroc != null || primaryErr.auprc != null)) {
+      return {
+        label: primaryScore.replace(/_/g, ' ').replace(/\b\w/g, function(ch) { return ch.toUpperCase(); }),
+        auroc: primaryErr.auroc,
+        auprc: primaryErr.auprc
+      };
+    }
+    const msp = uq.error_detection_one_minus_msp || {};
+    const entropy = uq.error_detection_entropy || {};
+    return {
+      label: '1-MSP',
+      auroc: msp.auroc != null ? msp.auroc : entropy.auroc,
+      auprc: msp.auprc != null ? msp.auprc : entropy.auprc
+    };
+  }
+  document.querySelector('#core-uq-table tbody').innerHTML = methods.length ? methods.map(function(method) {
+    const block = (((result || {}).results || {})[method] || {});
+    const uq = (block.uncertainty_quality) || {};
+    const primary = uncertaintyPrimary(block);
+    return '<tr><td class="mono">' + methodLabel(method) + '</td><td>' + primary.label + '</td><td>' + fmt4(primary.auroc) + '</td><td>' + fmt4(primary.auprc) + '</td><td>' + fmt4((((uq.error_detection_entropy || {}).auroc))) + '</td><td>' + fmt4((((uq.error_detection_one_minus_msp || {}).auroc))) + '</td></tr>';
+  }).join('') : '<tr><td colspan="6">No uncertainty-quality result loaded.</td></tr>';
+  setFigure('uncertainty-primary-img', figs.uncertainty_primary, 'Primary uncertainty comparison');
+  setFigure('uncertainty-common-img', figs.uncertainty_common, 'Shared uncertainty score comparison');
+  const bestPrimary = bestMethod(methods, function(method) {
+    return uncertaintyPrimary((((result || {}).results || {})[method] || {})).auroc;
+  }, false);
+  setText('uncertainty-result-summary', 'Comparison of how strongly each method separates incorrect from correct predictions. Stochastic methods use their disagreement-aware primary uncertainty here; deterministic methods fall back to 1-MSP.');
+  setText('uncertainty-result-interpretation', bestPrimary ? ('Interpretation: ' + methodLabel(bestPrimary.method) + ' currently gives the strongest primary error-discrimination AUROC (' + fmt4(bestPrimary.value) + ').') : 'Interpretation: no uncertainty-quality ranking is available yet.');
+  setText('uncertainty-result-source', sectionSourceText(outputPath));
+  setText('uncertainty-json-note', 'Saved summary: ' + (outputPath || 'evaluation/pipeline_summary.json') + '\nLog:\n' + (logText || 'No log available.'));
+  updateIndividualResultsVisibility();
+}
+
+function renderSelectiveResult(result, outputPath, logText) {
+  currentTechniqueResults.selective = result || {};
+  const methods = orderedMethodKeys((result || {}).results || {});
+  const figs = (((result || {}).outputs || {}).section_figures) || {};
+  document.querySelector('#core-selective-table tbody').innerHTML = methods.length ? methods.map(function(method) {
+    const sel = ((((result || {}).results || {})[method] || {}).selective_prediction) || {};
+    const thresholds = (sel.target_risk_thresholds || []);
+    const thresholdSummary = thresholds.length ? thresholds.map(function(row) { return 't ' + fmt4(row.target_risk) + ' -> c ' + fmt4(row.coverage); }).join(' | ') : 'n/a';
+    return '<tr><td class="mono">' + methodLabel(method) + '</td><td>' + fmt4(sel.aurc) + '</td><td>' + fmt4(sel.aurc_torch_uncertainty) + '</td><td>' + thresholdSummary + '</td><td>' + (sel.validation_fitted_deferral ? 'Available' : 'Not fitted') + '</td></tr>';
+  }).join('') : '<tr><td colspan="5">No selective-prediction result loaded.</td></tr>';
+  setFigure('selective-risk-coverage-img', figs.selective_risk_coverage, 'Selective prediction risk coverage');
+  setFigure('selective-high-confidence-img', figs.selective_high_confidence, 'Selective prediction high confidence cohort');
+  const best = bestMethod(methods, function(method) {
+    return ((((result || {}).results || {})[method] || {}).selective_prediction || {}).aurc;
+  }, true);
+  setText('selective-result-summary', 'Comparison of risk-coverage behaviour and threshold-based deferral across methods.');
+  setText('selective-result-interpretation', best ? ('Interpretation: ' + methodLabel(best.method) + ' currently has the lowest AURC, indicating the strongest overall risk-coverage tradeoff (' + fmt4(best.value) + ').') : 'Interpretation: no selective-prediction ranking is available yet.');
+  setText('selective-result-source', sectionSourceText(outputPath));
+  setText('selective-json-note', 'Saved summary: ' + (outputPath || 'evaluation/pipeline_summary.json') + '\nLog:\n' + (logText || 'No log available.'));
+  updateIndividualResultsVisibility();
+}
+
+function renderPathologyResult(result, outputPath, logText) {
+  currentTechniqueResults.pathology = result || {};
+  const methods = orderedMethodKeys((result || {}).results || {});
+  const figs = (((result || {}).outputs || {}).section_figures) || {};
+  document.querySelector('#core-pathology-table tbody').innerHTML = methods.length ? methods.map(function(method) {
+    const proxy = (((((result || {}).results || {})[method] || {}).pathology_reporting || {}).slide_level_proxy) || {};
+    return '<tr><td class="mono">' + methodLabel(method) + '</td><td>' + (proxy.proxy_type || 'n/a') + '</td><td>' + (proxy.bag_size != null ? proxy.bag_size : 'n/a') + '</td><td>' + (proxy.n_bags != null ? proxy.n_bags : 'n/a') + '</td><td>' + fmtPct(proxy.accuracy) + '</td><td>' + fmt4(proxy.roc_auc) + '</td><td>' + fmt4(proxy.pr_auc) + '</td></tr>';
+  }).join('') : '<tr><td colspan="7">No pathology proxy result loaded.</td></tr>';
+  setFigure('pathology-proxy-img', figs.pathology_proxy, 'Pathology proxy reporting comparison');
+  const best = bestMethod(methods, function(method) {
+    return ((((((result || {}).results || {})[method] || {}).pathology_reporting || {}).slide_level_proxy) || {}).roc_auc;
+  }, false);
+  setText('pathology-result-summary', 'Comparison of the pseudo-slide pathology reporting proxy across methods.');
+  setText('pathology-result-interpretation', best ? ('Interpretation: ' + methodLabel(best.method) + ' currently leads the pathology proxy comparison by slide-level ROC AUC (' + fmt4(best.value) + ').') : 'Interpretation: no pathology-proxy ranking is available yet.');
+  setText('pathology-result-source', sectionSourceText(outputPath));
+  setText('pathology-json-note', 'Saved summary: ' + (outputPath || 'evaluation/pipeline_summary.json') + '\nLog:\n' + (logText || 'No log available.'));
+  updateIndividualResultsVisibility();
+}
+
+function renderShiftResult(result, outputPath, logText) {
+  currentTechniqueResults.shift = result || {};
+  const grouped = (result || {}).grouped_summary_by_method || {};
+  const byMethod = (result || {}).results_by_method || {};
+  const methods = orderedMethodKeys(grouped);
+  const figs = (((result || {}).outputs || {}).section_figures) || {};
+  document.querySelector('#shift-grouped-table tbody').innerHTML = methods.length ? methods.map(function(method) {
+    const near = (grouped[method] || {}).near_ood || {};
+    const far = (grouped[method] || {}).far_ood || {};
+    return '<tr><td class="mono">' + methodLabel(method) + '</td><td>' + (near.n_conditions != null ? near.n_conditions : 'n/a') + '</td><td>' + fmt4(near.mean_ood_auroc) + '</td><td>' + fmt4(near.mean_ood_auprc) + '</td><td>' + fmt4(near.mean_accuracy) + '</td><td>' + fmt4(near.mean_ece) + '</td><td>' + (far.n_conditions != null ? far.n_conditions : 'n/a') + '</td><td>' + fmt4(far.mean_ood_auroc) + '</td><td>' + fmt4(far.mean_ood_auprc) + '</td><td>' + fmt4(far.mean_accuracy) + '</td><td>' + fmt4(far.mean_ece) + '</td></tr>';
+  }).join('') : '<tr><td colspan="11">No grouped summary loaded.</td></tr>';
+  // Helper: parse condition key like "blur_s3" → {shift:'blur', severity:3}
+  // or "id_s0" → {shift:'id', severity:0}
+  function parseConditionKey(key) {
+    var m = key.match(/^([a-z]+)_s(\d+)$/);
+    if (!m) return null;
+    return { shift: m[1], severity: parseInt(m[2], 10) };
+  }
+
+  // Build preview URL for a condition key
+  function conditionPreviewUrl(key, idx) {
+    var parsed = parseConditionKey(key);
+    if (!parsed || parsed.shift === 'id') {
+      return '/api/dataset/test/sample/' + (idx || 42);
+    }
+    return '/api/dataset/test/sample/' + (idx || 42) + '/corrupted?shift=' + parsed.shift + '&severity=' + parsed.severity + '&size=96';
+  }
+
+  // Severity color coding
+  function severityBorder(key) {
+    var parsed = parseConditionKey(key);
+    if (!parsed || parsed.shift === 'id') return '2px solid var(--accent,#5b8dee)';
+    if (parsed.severity <= 1) return '2px solid #4caf6e';
+    if (parsed.severity <= 3) return '2px solid #e6a817';
+    return '2px solid #e05252';
+  }
+
+  const condRows = [];
+  methods.forEach(function(method) {
+    Object.keys(byMethod[method] || {}).sort().forEach(function(key) {
+      const row = (byMethod[method] || {})[key] || {};
+      var thumbUrl = conditionPreviewUrl(key, 42);
+      var border = severityBorder(key);
+      var thumb = '<img src="' + thumbUrl + '" width="56" height="56" style="display:block;border-radius:3px;border:' + border + ';background:#222;" loading="lazy" title="' + key + '">';
+      condRows.push('<tr>'
+        + '<td style="padding:3px 6px;vertical-align:middle;">' + thumb + '</td>'
+        + '<td class="mono">' + methodLabel(method) + ' / ' + key + '</td>'
+        + '<td>' + fmt4(row.accuracy) + '</td>'
+        + '<td>' + fmt4(row.ece) + '</td>'
+        + '<td>' + fmt4(row.mean_uncertainty) + '</td>'
+        + '<td>' + fmt4(row.ood_detection_auroc) + '</td>'
+        + '<td>' + fmt4(row.ood_detection_auprc) + '</td>'
+        + '</tr>');
+    });
+  });
+  document.querySelector('#shift-condition-table tbody').innerHTML = condRows.length ? condRows.join('') : '<tr><td colspan="7">No shift detail loaded.</td></tr>';
+
+  // Build the visual filter strip above the table
+  // Collect unique conditions across all methods and show original + all shifts
+  var seenKeys = {};
+  methods.forEach(function(method) {
+    Object.keys(byMethod[method] || {}).sort().forEach(function(key) { seenKeys[key] = true; });
+  });
+  var uniqueKeys = Object.keys(seenKeys).sort();
+  var stripEl = document.getElementById('shift-condition-strip');
+  var stripInner = document.getElementById('shift-condition-strip-inner');
+  if (stripEl && stripInner && uniqueKeys.length > 0) {
+    var LABEL_MAP = { id: 'Original', blur: 'Blur', noise: 'Noise', jpeg: 'JPEG', color: 'Color' };
+    var stripHtml = '';
+    // Group by shift type for visual clarity
+    var grouped = {};
+    uniqueKeys.forEach(function(key) {
+      var parsed = parseConditionKey(key);
+      if (!parsed) return;
+      if (!grouped[parsed.shift]) grouped[parsed.shift] = [];
+      grouped[parsed.shift].push({ key: key, severity: parsed.severity });
+    });
+    Object.keys(grouped).sort().forEach(function(shift) {
+      var items = grouped[shift].sort(function(a, b) { return a.severity - b.severity; });
+      var shiftLabel = LABEL_MAP[shift] || shift;
+      stripHtml += '<div style="display:inline-flex;flex-direction:column;align-items:center;gap:4px;">';
+      stripHtml += '<div style="font-size:0.78rem;color:var(--accent,#5b8dee);font-weight:600;text-align:center;">' + shiftLabel + '</div>';
+      stripHtml += '<div style="display:flex;gap:4px;">';
+      items.forEach(function(item) {
+        var url = conditionPreviewUrl(item.key, 42);
+        var border = severityBorder(item.key);
+        var sevLabel = item.severity === 0 ? '—' : 'S' + item.severity;
+        stripHtml += '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;">';
+        stripHtml += '<img src="' + url + '" width="80" height="80" style="display:block;border-radius:4px;border:' + border + ';background:#222;" loading="lazy" title="' + item.key + '">';
+        stripHtml += '<span style="font-size:0.72rem;color:var(--muted);">' + sevLabel + '</span>';
+        stripHtml += '</div>';
+      });
+      stripHtml += '</div></div>';
+    });
+    stripInner.innerHTML = stripHtml;
+    stripEl.style.display = uniqueKeys.length > 0 ? 'block' : 'none';
+  }
+  setFigure('shift-detection-img', figs.shift_detection, 'Shift and OOD detection summary');
+  setFigure('shift-robustness-img', figs.shift_robustness, 'Shift robustness summary');
+  setFigure('shift-section-detail-img', figs.shift_detail_ood_auroc, 'Shift per-condition detail');
+  const bestNear = bestMethod(methods, function(method) {
+    return (((grouped[method] || {}).near_ood) || {}).mean_ood_auroc;
+  }, false);
+  setText('shift-result-summary', 'Comparison of robustness and OOD discrimination across methods under synthetic dataset shift.');
+  setText('shift-result-interpretation', bestNear ? ('Interpretation: ' + methodLabel(bestNear.method) + ' currently gives the strongest near-OOD discrimination by AUROC (' + fmt4(bestNear.value) + ').') : 'Interpretation: no shift/OOD ranking is available yet.');
+  setText('shift-result-source', sectionSourceText(outputPath));
+  setText('shift-json-note', 'Saved summary: ' + (outputPath || 'evaluation/shift_comparison_summary.json') + '\nLog:\n' + (logText || 'No log available.'));
+  updateIndividualResultsVisibility();
+}
+
+window.EvaluateMethodCards = { init: function() {} };
+
+function populateSectionResultsFromBundle(bundle, outputPath) {
+  const outputs = (bundle || {}).outputs || {};
+  const coreResult = {
+    config: (bundle || {}).config || {},
+    results: (bundle || {}).pipeline || {}
+  };
+  const shiftResult = {
+    config: (bundle || {}).config || {},
+    grouped_summary_by_method: (bundle || {}).shift_ood_grouped_by_method || {},
+    results_by_method: (bundle || {}).shift_ood_by_method || {}
+  };
+  renderPerformanceResult(coreResult, outputs.pipeline_summary || outputPath, 'Loaded from saved bundle.');
+  renderCalibrationResult(coreResult, outputs.pipeline_summary || outputPath, 'Loaded from saved bundle.');
+  renderUncertaintyResult(coreResult, outputs.pipeline_summary || outputPath, 'Loaded from saved bundle.');
+  renderSelectiveResult(coreResult, outputs.pipeline_summary || outputPath, 'Loaded from saved bundle.');
+  renderPathologyResult(coreResult, outputs.pipeline_summary || outputPath, 'Loaded from saved bundle.');
+  renderShiftResult(shiftResult, outputs.shift_summary || outputPath, 'Loaded from saved bundle.');
+}
+
+function renderBundleResult(result, outputPath) {
+  currentBundleResult = result;
+  byId('results-section').style.display = 'block';
+  const methods = renderCoreTable(result);
+  renderShiftTable(result);
+  populateBatchMethodSelect(methods);
+  byId('bundle-summary').textContent =
+    'Completed bundle: ' + outputPath +
+    ' | methods: ' + methods.join(', ') +
+    ' | best near-OOD method: ' + ((((result.shift_method_comparison || {}).best_near_ood_by_auroc || {}).method) || 'n/a');
+  byId('bundle-json-note').textContent =
+    'Saved summary: ' + outputPath + '\n' +
+    'The report below is loaded from the saved program-generated report package and its figure manifest.';
+  loadReportManifest(result).then(function(manifest) {
+    currentReportManifest = manifest;
+    renderSummaryFigures(manifest);
+    return loadDetailedMetrics(manifest);
+  }).then(renderDetailedCurves).catch(function() {
+    currentReportManifest = null;
+    renderSummaryFigures(null);
+    renderDetailedCurves([]);
+  });
+  populateSectionResultsFromBundle(result, outputPath);
+  if (methods.length) loadBatchCorrectness(byId('batch-method-select').value || methods[0]);
+}
+
+function startRunAll() {
+  if (ws) {
+    try { ws.close(); } catch (e) {}
+  }
+  currentReportManifest = null;
+  byId('btn-run-all').disabled = true;
+  byId('run-badge').textContent = 'Running';
+  byId('live-log').textContent = 'Connecting to evaluation worker...';
+  byId('results-section').style.display = 'none';
+  clearFigure('benchmark-summary-img', 'Waiting for run...');
+  clearFigure('reliability-img', 'Waiting for run...');
+  clearFigure('risk-coverage-img', 'Waiting for run...');
+  clearFigure('shift-summary-img', 'Waiting for run...');
+  clearFigure('confusion-img', 'Waiting for run...');
+  clearFigure('temperature-img', 'Waiting for run...');
+  clearFigure('error-roc-img', 'Waiting for run...');
+  clearFigure('error-pr-img', 'Waiting for run...');
+  clearFigure('uncertainty-hist-img', 'Waiting for run...');
+  clearFigure('entropy-hist-img', 'Waiting for run...');
+  clearFigure('shift-detail-img', 'Waiting for run...');
+  progressSet(0, 'Connecting...');
+
+  ws = new WebSocket(wsUrl('/ws/evaluate/all'));
+  ws.onopen = function() {
+    ws.send(JSON.stringify(bundlePayload()));
+    appendLog('[connected]');
+  };
+  ws.onmessage = function(ev) {
+    let msg = {};
+    try { msg = JSON.parse(ev.data); } catch (e) { appendLog(ev.data); return; }
+    if (msg.type === 'progress') {
+      progressSet(msg.progress || 0, (msg.stage || 'stage') + ': ' + (msg.message || 'running'));
+      appendLog('[progress] ' + (msg.message || ''));
+    } else if (msg.type === 'log') {
+      appendLog(msg.text || '');
+    } else if (msg.type === 'status') {
+      appendLog('[status] ' + (msg.message || ''));
+    } else if (msg.type === 'result') {
+      renderBundleResult(msg.result || {}, msg.output_path || 'evaluation/thesis_bundle_summary.json');
+      refreshSavedBundles();
+    } else if (msg.type === 'error') {
+      appendLog('[error] ' + (msg.message || 'Unknown error'));
+      byId('run-badge').textContent = 'Failed';
+      byId('btn-run-all').disabled = false;
+    } else if (msg.type === 'done') {
+      progressSet(1, msg.message || 'Finished');
+      byId('run-badge').textContent = 'Done';
+      byId('btn-run-all').disabled = false;
+      try { ws.close(); } catch (e) {}
+    }
+  };
+  ws.onerror = function() {
+    appendLog('[error] WebSocket connection failed.');
+    byId('run-badge').textContent = 'Failed';
+    byId('btn-run-all').disabled = false;
+  };
+  ws.onclose = function() {
+    if (byId('run-badge').textContent === 'Running') {
+      byId('run-badge').textContent = 'Closed';
+      byId('btn-run-all').disabled = false;
+    }
+  };
+}
+
+populateRuns();
+refreshSavedBundles();
+refreshAllSavedSections();
+byId('btn-run-all').addEventListener('click', startRunAll);
+byId('btn-run-section-performance').addEventListener('click', function() {
+  runSectionComparison('performance', '/api/evaluate/compare/core', compareCorePayload('performance'), 'btn-run-section-performance', renderPerformanceResult);
+});
+byId('btn-run-section-calibration').addEventListener('click', function() {
+  runSectionComparison('calibration', '/api/evaluate/compare/core', compareCorePayload('calibration'), 'btn-run-section-calibration', renderCalibrationResult);
+});
+byId('btn-run-section-uncertainty').addEventListener('click', function() {
+  runSectionComparison('uncertainty', '/api/evaluate/compare/core', compareCorePayload('uncertainty'), 'btn-run-section-uncertainty', renderUncertaintyResult);
+});
+byId('btn-run-section-selective').addEventListener('click', function() {
+  runSectionComparison('selective', '/api/evaluate/compare/core', compareCorePayload('selective'), 'btn-run-section-selective', renderSelectiveResult);
+});
+byId('btn-run-section-pathology').addEventListener('click', function() {
+  runSectionComparison('pathology', '/api/evaluate/compare/core', compareCorePayload('pathology'), 'btn-run-section-pathology', renderPathologyResult);
+});
+byId('btn-run-section-shift').addEventListener('click', function() {
+  runSectionComparison('shift', '/api/evaluate/compare/shift', compareShiftPayload(), 'btn-run-section-shift', renderShiftResult);
+});
+byId('btn-load-saved').addEventListener('click', function() {
+  const name = byId('saved-bundle-select').value;
+  if (!name) return;
+  fetch('/api/evaluate/results?action=load&name=' + encodeURIComponent(name))
+    .then(r => r.json())
+    .then(function(d) {
+      if (!d.ok) throw new Error(d.error || 'Failed to load saved result');
+      renderBundleResult(d.result || {}, d.path || name);
+    })
+    .catch(function(e) {
+      byId('saved-bundle-note').textContent = 'Load failed: ' + e.message;
+    });
+});
+byId('saved-bundle-select').addEventListener('change', function() {
+  renderSavedBundlePreview(this.value);
+});
+byId('btn-load-section-performance').addEventListener('click', function() { loadSavedSection('performance'); });
+byId('btn-load-section-calibration').addEventListener('click', function() { loadSavedSection('calibration'); });
+byId('btn-load-section-uncertainty').addEventListener('click', function() { loadSavedSection('uncertainty'); });
+byId('btn-load-section-selective').addEventListener('click', function() { loadSavedSection('selective'); });
+byId('btn-load-section-pathology').addEventListener('click', function() { loadSavedSection('pathology'); });
+byId('btn-load-section-shift').addEventListener('click', function() { loadSavedSection('shift'); });
+byId('saved-section-performance-select').addEventListener('change', function() { renderSavedSectionPreview('performance', this.value); });
+byId('saved-section-calibration-select').addEventListener('change', function() { renderSavedSectionPreview('calibration', this.value); });
+byId('saved-section-uncertainty-select').addEventListener('change', function() { renderSavedSectionPreview('uncertainty', this.value); });
+byId('saved-section-selective-select').addEventListener('change', function() { renderSavedSectionPreview('selective', this.value); });
+byId('saved-section-pathology-select').addEventListener('change', function() { renderSavedSectionPreview('pathology', this.value); });
+byId('saved-section-shift-select').addEventListener('change', function() { renderSavedSectionPreview('shift', this.value); });
+byId('run-select').addEventListener('change', function() {
+  refreshSavedBundles();
+  refreshAllSavedSections();
+  refreshEnsembleCandidates();
+});
+byId('bundle-split').addEventListener('change', function() {
+  refreshSavedBundles();
+  refreshAllSavedSections();
+});
+byId('bundle-ensemble-size').addEventListener('change', refreshEnsembleCandidates);
+byId('bundle-include-ens').addEventListener('change', function() {
+  updateEnsembleSelectionNote();
+  renderBundleEnsemblePicker();
+  renderAllSectionEnsemblePickers();
+});
+byId('batch-method-select').addEventListener('change', function() {
+  loadBatchCorrectness(this.value);
+});
+byId('detail-method-select').addEventListener('change', function() {
+  renderDetailedMethodReport(this.value);
+});
+byId('shift-detail-metric').addEventListener('change', function() {
+  if (currentBundleResult && byId('detail-method-select').value) renderDetailedMethodReport(byId('detail-method-select').value);
+});
+clearFigure('benchmark-summary-img', 'Run all evaluations to see benchmark figures');
+clearFigure('reliability-img', 'Run all evaluations to see reliability');
+clearFigure('risk-coverage-img', 'Run all evaluations to see selective prediction');
+clearFigure('shift-summary-img', 'Run all evaluations to see shift/OOD');
+clearFigure('performance-thresholded-img', 'Run predictive-performance comparison');
+clearFigure('performance-ranking-img', 'Run predictive-performance comparison');
+clearFigure('calibration-metrics-img', 'Run calibration comparison');
+clearFigure('calibration-reliability-img', 'Run calibration comparison');
+clearFigure('uncertainty-primary-img', 'Run uncertainty-quality comparison');
+clearFigure('uncertainty-common-img', 'Run uncertainty-quality comparison');
+clearFigure('selective-risk-coverage-img', 'Run selective comparison');
+clearFigure('selective-high-confidence-img', 'Run selective comparison');
+clearFigure('pathology-proxy-img', 'Run pathology comparison');
+clearFigure('shift-detection-img', 'Run shift comparison');
+clearFigure('shift-robustness-img', 'Run shift comparison');
+clearFigure('shift-section-detail-img', 'Run shift comparison');
+clearFigure('confusion-img', 'Load a bundle to see confusion matrix');
+clearFigure('temperature-img', 'Load a bundle to see temperature scaling');
+clearFigure('error-roc-img', 'Load a bundle to see error ROC');
+clearFigure('error-pr-img', 'Load a bundle to see error PR');
+clearFigure('uncertainty-hist-img', 'Run a bundle to see uncertainty histogram');
+clearFigure('entropy-hist-img', 'Run a bundle to see entropy histogram');
+clearFigure('shift-detail-img', 'Load a bundle to see per-condition shift detail');
+clearCanvas('batch-correctness-chart', 'Load a bundle to see batch correctness');
+clearCanvas('batch-confidence-chart', 'Load a bundle to see batch confidence');
+refreshEnsembleCandidates();
+
+// ── Advanced Uncertainty Analysis ────────────────────────────────────────────
+function loadConformalResults() {
+  fetch('/api/evaluate/conformal-results')
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.error) { document.getElementById('conformal-status').textContent = d.error; return; }
+      document.getElementById('conformal-status').textContent = '';
+      document.getElementById('conformal-wrap').style.display = 'block';
+      var rows = [];
+      var results = d.results || {};
+      Object.keys(results).forEach(function(method) {
+        var alphaRows = (results[method].alphas_evaluated || []);
+        alphaRows.forEach(function(row) {
+          var gap = row.coverage_gap;
+          var gapColor = Math.abs(gap) > 0.05 ? '#e05252' : (gap >= 0 ? '#4caf6e' : '#e6a817');
+          rows.push('<tr>'
+            + '<td class="mono">' + method + '</td>'
+            + '<td>' + row.alpha.toFixed(2) + '</td>'
+            + '<td>' + row.target_coverage.toFixed(2) + '</td>'
+            + '<td>' + row.empirical_coverage.toFixed(4) + '</td>'
+            + '<td style="color:' + gapColor + ';font-weight:600;">' + (gap >= 0 ? '+' : '') + gap.toFixed(4) + '</td>'
+            + '<td>' + row.avg_prediction_set_size.toFixed(4) + '</td>'
+            + '<td>' + (row.singleton_rate * 100).toFixed(1) + '%</td>'
+            + '<td>' + (row.full_set_rate * 100).toFixed(1) + '%</td>'
+            + '</tr>');
+        });
+      });
+      document.querySelector('#conformal-table tbody').innerHTML = rows.join('') || '<tr><td colspan="8">No data.</td></tr>';
+    })
+    .catch(function(e) { document.getElementById('conformal-status').textContent = 'Failed to load: ' + e; });
+}
+
+function loadAEDecomposition() {
+  fetch('/api/evaluate/aleatoric-epistemic')
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.error) { document.getElementById('ae-status').textContent = d.error; return; }
+      document.getElementById('ae-status').textContent = '';
+      document.getElementById('ae-wrap').style.display = 'block';
+      var det = d.error_detection || {};
+      var rows = [
+        { label: 'Total (Predictive Entropy)', mean: (d.total_predictive_entropy || {}).mean, pct: 100, auroc: det.total_entropy_auroc, auprc: det.total_entropy_auprc },
+        { label: 'Epistemic (Mutual Info)', mean: (d.epistemic_mutual_information || {}).mean, pct: (d.ratio_epistemic || 0) * 100, auroc: det.epistemic_mi_auroc, auprc: det.epistemic_mi_auprc },
+        { label: 'Aleatoric (PE − MI)', mean: (d.aleatoric || {}).mean, pct: (d.ratio_aleatoric || 0) * 100, auroc: det.aleatoric_auroc, auprc: det.aleatoric_auprc },
+      ];
+      var fmt = function(v) { return v != null ? v.toFixed(4) : '—'; };
+      document.querySelector('#ae-table tbody').innerHTML = rows.map(function(r) {
+        return '<tr><td>' + r.label + '</td><td>' + fmt(r.mean) + '</td>'
+          + '<td>' + r.pct.toFixed(1) + '%</td>'
+          + '<td>' + fmt(r.auroc) + '</td>'
+          + '<td>' + fmt(r.auprc) + '</td></tr>';
+      }).join('');
+    })
+    .catch(function(e) { document.getElementById('ae-status').textContent = 'Failed to load: ' + e; });
+}
+
+function loadECEUnderShift() {
+  fetch('/api/evaluate/ece-under-shift')
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.error) { document.getElementById('ece-shift-status').textContent = d.error; return; }
+      document.getElementById('ece-shift-status').textContent = '';
+      document.getElementById('ece-shift-wrap').style.display = 'block';
+      var rows = [];
+      var SHIFTS = ['blur', 'noise', 'jpeg', 'color'];
+      Object.keys(d).sort().forEach(function(method) {
+        SHIFTS.forEach(function(shift) {
+          var s = (d[method] || {})[shift] || {};
+          var id_ece = (s.id || {}).ece;
+          var fmt = function(v) { return v != null ? v.toFixed(4) : '—'; };
+          var sev = function(key) { return fmt(((s[key] || {}).ece)); };
+          rows.push('<tr><td class="mono">' + method + '</td><td>' + shift + '</td>'
+            + '<td>' + fmt(id_ece) + '</td>'
+            + '<td style="color:#4caf6e;">' + sev('sev_1') + '</td>'
+            + '<td style="color:#e6a817;">' + sev('sev_3') + '</td>'
+            + '<td style="color:#e05252;">' + sev('sev_5') + '</td>'
+            + '</tr>');
+        });
+      });
+      document.querySelector('#ece-shift-table tbody').innerHTML = rows.join('') || '<tr><td colspan="6">No data.</td></tr>';
+    })
+    .catch(function(e) { document.getElementById('ece-shift-status').textContent = 'Failed to load: ' + e; });
+}
+
+function loadCrossDomainOOD() {
+  fetch('/api/evaluate/cross-domain-ood')
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.error) { document.getElementById('ood-status').textContent = d.error; return; }
+      document.getElementById('ood-status').textContent = '';
+      document.getElementById('ood-wrap').style.display = 'block';
+      var rows = [];
+      var methodOrder = ['confidence', 'mc_dropout', 'deep_ensemble', 'temperature_scaled'];
+      methodOrder.forEach(function(method) {
+        var v = (d.results || {})[method];
+        if (!v) return;
+        var uncUp = v.nct_mean_unc > v.pcam_mean_unc;
+        var uncIcon = uncUp ? '<span style="color:#4caf6e;">↑ correct</span>' : '<span style="color:#e05252;">↓ overconfident</span>';
+        var bestAuroc = 0;
+        Object.values(v.ood_detection || {}).forEach(function(det) {
+          if ((det.auroc || 0) > bestAuroc) bestAuroc = det.auroc || 0;
+        });
+        var auroc_color = bestAuroc >= 0.65 ? '#4caf6e' : (bestAuroc >= 0.55 ? '#e6a817' : '#e05252');
+        rows.push('<tr>'
+          + '<td class="mono">' + method + '</td>'
+          + '<td>' + v.pcam_accuracy.toFixed(4) + '</td>'
+          + '<td>' + v.pcam_mean_unc.toFixed(4) + '</td>'
+          + '<td>' + v.nct_accuracy.toFixed(4) + '</td>'
+          + '<td>' + v.nct_mean_unc.toFixed(4) + '</td>'
+          + '<td>' + uncIcon + '</td>'
+          + '<td style="color:' + auroc_color + ';font-weight:600;">' + bestAuroc.toFixed(4) + '</td>'
+          + '</tr>');
+      });
+      document.querySelector('#ood-table tbody').innerHTML = rows.join('') || '<tr><td colspan="7">No data.</td></tr>';
+    })
+    .catch(function(e) { document.getElementById('ood-status').textContent = 'Failed: ' + e; });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  loadConformalResults();
+  loadAEDecomposition();
+  loadECEUnderShift();
+  loadCrossDomainOOD();
+});
+if (document.readyState !== 'loading') {
+  loadConformalResults();
+  loadAEDecomposition();
+  loadECEUnderShift();
+  loadCrossDomainOOD();
+}
+</script>
+{% endblock %}

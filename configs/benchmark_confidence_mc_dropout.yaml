@@ -1,0 +1,43 @@
+seed: 42
+
+run:
+  output_base: runs
+  name: thesis_benchmark_pcam_512
+
+pipeline:
+  mode: evaluate
+
+dataset:
+  type: pcam
+  root: data/raw
+  image_size: [224, 224]
+  batch_size: 32
+  num_workers: 0
+  max_eval_samples: 512
+  eval_split: test
+  seed: 42
+
+model:
+  source: huggingface
+  model_id: google/vit-base-patch16-224
+  num_labels: 2
+  dropout: 0.1
+  local_checkpoint: null
+  ensemble_checkpoints: []
+
+uncertainty:
+  method: confidence
+  mc_dropout_n_samples: 30
+
+evaluation:
+  calibration_bins: 15
+  top_k_uncertain: 12
+  plots:
+    reliability: true
+    risk_coverage: true
+    uncertainty_histograms: true
+
+benchmark:
+  methods:
+    - confidence
+    - mc_dropout

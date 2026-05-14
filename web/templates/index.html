@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}Home — Uncertainty in Digital Pathology{% endblock %}
+{% block content %}
+<h1>Home</h1>
+<p class="page-subtitle">Thesis overview: dataset integrity, configuration, and execution status.</p>
+
+<section class="section">
+  <div class="section-num">0. Interpretation guide</div>
+  <div class="card">
+    <div class="info-box">
+      <p><strong>Purpose</strong>: confirm setup validity before quantitative experiments.</p>
+      <ul>
+        <li><strong>Dataset summary</strong> verifies split sizes and class balance.</li>
+        <li><strong>Configuration</strong> documents model and uncertainty settings used in experiments.</li>
+        <li><strong>Pipeline status</strong> links to reproducible run and evaluation workflows.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-num">1. Dataset summary</div>
+  <div class="card">
+    <p>PCAM split statistics (normal = 0, metastasis = 1).</p>
+    <table class="data-table" id="dataset-summary">
+      <thead>
+        <tr>
+          <th>Split</th>
+          <th>Size</th>
+          <th>Normal (0)</th>
+          <th>Metastasis (1)</th>
+          <th>Ratio (N/M)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td colspan="5">Loading…</td></tr>
+      </tbody>
+    </table>
+    <div class="info-box">
+      <p><strong>Why this matters</strong>: class ratio affects PR-AUC interpretation and operating-point behavior.</p>
+    </div>
+    <p style="margin-top:0.75rem;margin-bottom:0;">
+      <a href="{{ url_for('setup_page') }}" class="btn btn-primary">Setup</a>
+      <a href="{{ url_for('dataset_page') }}" class="btn">Dataset browser</a>
+    </p>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-num">2. Configuration</div>
+  <div class="card">
+    <p>Default configuration used by training and evaluation scripts.</p>
+    <table class="data-table">
+      <tbody>
+        <tr><th style="width:12rem;">Model</th><td class="mono">{{ config.model.model_id if config and config.get('model') else '—' }}</td></tr>
+        <tr><th>Data root</th><td class="mono">{{ config.data.root if config and config.get('data') else 'data/raw' }}</td></tr>
+        <tr><th>Image size</th><td class="mono">{{ config.data.image_size | join('×') if config and config.get('data') and config.data.get('image_size') else '—' }}</td></tr>
+        <tr><th>Batch size</th><td>{{ config.data.batch_size if config and config.get('data') else '—' }}</td></tr>
+        <tr><th>Uncertainty methods</th><td>{{ config.uncertainty.methods | join(', ') if config and config.get('uncertainty') else '—' }}</td></tr>
+      </tbody>
+    </table>
+    <div class="info-box">
+      <p><strong>Traceability</strong>: report these values in thesis methods for reproducibility.</p>
+    </div>
+    <p style="margin-top:0.75rem;margin-bottom:0;"><a href="{{ url_for('project') }}" class="btn">Full config & project</a></p>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-num">3. Pipeline & run</div>
+  <div class="card">
+    <p>Core workflow: environment check, data/model preparation, training, and quantitative evaluation.</p>
+    <div class="info-box">
+      <p><strong>Next recommended step</strong>: use <em>Run</em> for checkpoint generation, then <em>Results</em> for uncertainty metrics and shift robustness.</p>
+    </div>
+    <p style="margin-bottom:0;"><a href="{{ url_for('run_page') }}" class="btn btn-primary">Open run console</a></p>
+  </div>
+</section>
+
+<script>
+(function() {
+  var tbody = document.querySelector('#dataset-summary tbody');
+  var splits = ['train', 'val', 'test'];
+  var done = 0;
+  var data = {};
+  function render() {
+    if (done < 3) return;
+    tbody.innerHTML = splits.map(function(s) {
+      var d = data[s];
+      if (d.error) return '<tr><td>' + s + '</td><td colspan="4">' + d.error + '</td></tr>';
+      var r = d.count_normal && d.count_metastasis ? (d.count_normal / d.count_metastasis).toFixed(2) : '—';
+      return '<tr><td>' + s + '</td><td>' + d.size.toLocaleString() + '</td><td>' + (d.count_normal != null ? d.count_normal.toLocaleString() : '—') + '</td><td>' + (d.count_metastasis != null ? d.count_metastasis.toLocaleString() : '—') + '</td><td>' + r + '</td></tr>';
+    }).join('');
+  }
+  splits.forEach(function(split) {
+    fetch('/api/dataset/' + split + '/stats').then(function(r) { return r.json(); }).then(function(d) {
+      data[split] = d;
+      done++;
+      render();
+    }).catch(function() {
+      data[split] = { error: 'Unavailable' };
+      done++;
+      render();
+    });
+  });
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,439 @@
+{% extends "base.html" %}
+{% block title %}Dataset — Uncertainty in Digital Pathology{% endblock %}
+{% block content %}
+<h1>Dataset</h1>
+<p class="page-subtitle">PCAM integrity and preview workspace for thesis documentation.</p>
+
+<section class="section">
+  <div class="section-num">0. Scope and rationale</div>
+  <div class="card">
+    <div class="info-box">
+      <p><strong>Current scope</strong>: PCAM (patch-level binary task).</p>
+      <ul>
+        <li><strong>Why this page is needed</strong>: uncertainty metrics require validated labels and splits.</li>
+        <li><strong>Label convention</strong>: normal = 0, metastasis = 1.</li>
+        <li><strong>Reference</strong>: <a href="https://patchcamelyon.grand-challenge.org/Download/" target="_blank" rel="noopener noreferrer">Patch Camelyon resource</a>.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-num">1. Label verification</div>
+  <div class="card">
+    <p style="color:var(--muted);">Split-wise integrity check: all samples should have valid binary labels.</p>
+    <div id="verify-box" style="margin-top:0.5rem;">Loading…</div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-num">2. Dataset statistics</div>
+  <div class="card">
+    <p>Class counts and ratio per split for imbalance assessment.</p>
+    <table class="data-table" id="stats-table">
+      <thead>
+        <tr>
+          <th>Split</th>
+          <th>Total</th>
+          <th>Normal (0)</th>
+          <th>Metastasis (1)</th>
+          <th>Ratio N/M</th>
+        </tr>
+      </thead>
+      <tbody><tr><td colspan="5">Loading…</td></tr></tbody>
+    </table>
+    <div class="info-box">
+      <p><strong>Interpretation</strong>: PR-AUC is particularly informative under stronger class imbalance.</p>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-num">3. Resources (download & reference)</div>
+  <div class="card">
+    <p>Canonical links for dataset access and citation context.</p>
+    <div id="resources-box">Loading…</div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-num">4. Corruption filter preview</div>
+  <div class="card">
+    <div class="info-box">
+      <p><strong>What this shows</strong>: the four synthetic corruptions used in shift/OOD evaluation — applied to real PCAM patches at severity levels 1 (mild), 3 (medium), and 5 (severe). These are the exact same transforms run during experiment evaluation.</p>
+      <ul style="margin-top:0.4rem;">
+        <li><strong>Blur</strong> — Gaussian blur (radius 0.5 → 2.5 px)</li>
+        <li><strong>JPEG</strong> — Downsample/upsample artefacts (scale 0.95 → 0.45)</li>
+        <li><strong>Noise</strong> — Additive Gaussian noise (σ 6 → 30)</li>
+        <li><strong>Color shift</strong> — Reduced saturation + increased contrast</li>
+      </ul>
+    </div>
+
+    <h3 style="margin:1rem 0 0.5rem;font-size:1rem;">Overview grid (3 fixed patches × 4 corruptions × 3 severities)</h3>
+    <div id="corruption-grid-wrap" style="text-align:center;margin-bottom:1.2rem;">
+      <img id="corruption-grid-img" src="/api/dataset/corruption-grid"
+           alt="Corruption preview grid"
+           style="max-width:100%;border-radius:6px;border:1px solid var(--border,#333);"
+           onerror="this.parentElement.innerHTML='<p style=\'color:var(--muted)\'>Grid image could not be loaded.</p>'">
+    </div>
+
+    <h3 style="margin:1rem 0 0.5rem;font-size:1rem;">Interactive: apply filter to any sample</h3>
+    <div class="toolbar" style="flex-wrap:wrap;gap:0.6rem;margin-bottom:0.8rem;">
+      <span class="toolbar-title">Split</span>
+      <div class="form-group">
+        <select id="corr-split">
+          <option value="test" selected>Test</option>
+          <option value="val">Validation</option>
+          <option value="train">Train</option>
+        </select>
+      </div>
+      <span class="toolbar-title">Sample index</span>
+      <div class="form-group">
+        <input type="number" id="corr-idx" value="0" min="0" max="32767" style="width:6rem;">
+      </div>
+      <button class="btn btn-secondary" id="corr-random-btn" style="padding:0.35rem 0.8rem;">Random</button>
+      <button class="btn btn-primary" id="corr-apply-btn">Show filters</button>
+    </div>
+
+    <div id="corr-status" style="color:var(--muted);font-size:0.88rem;margin-bottom:0.5rem;"></div>
+
+    <!-- Grid: rows = severity, cols = original + 4 corruptions -->
+    <div id="corr-table-wrap" style="display:none;overflow-x:auto;">
+      <table id="corr-table" style="border-collapse:separate;border-spacing:4px;margin:0 auto;">
+        <thead id="corr-thead"></thead>
+        <tbody id="corr-tbody"></tbody>
+      </table>
+      <p style="font-size:0.82rem;color:var(--muted);margin-top:0.5rem;text-align:center;">
+        Images resized to 192 px for display. Same transforms are applied during model evaluation.
+      </p>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-num">5. Sample browser</div>
+  <div class="card">
+    <div class="info-box">
+      <p><strong>Use case</strong>: visual quality control of patches and labels before training/evaluation.</p>
+    </div>
+
+    <div class="toolbar">
+      <span class="toolbar-title">Dataset</span>
+      <div class="form-group">
+        <select id="dataset-select">
+          <option value="pcam">Patch Camelyon (PCAM)</option>
+        </select>
+      </div>
+      <span class="toolbar-title">Split</span>
+      <div class="form-group">
+        <select id="split-select">
+          <option value="train">Training</option>
+          <option value="val">Validation</option>
+          <option value="test">Test</option>
+        </select>
+      </div>
+      <span class="toolbar-title">Label filter</span>
+      <div class="form-group">
+        <select id="label-filter">
+          <option value="all">All</option>
+          <option value="0">Normal (0)</option>
+          <option value="1">Metastasis (1)</option>
+        </select>
+      </div>
+      <span class="toolbar-title">Preview mode</span>
+      <div class="form-group">
+        <select id="preview-mode">
+          <option value="offset">Offset range</option>
+          <option value="random">Random</option>
+        </select>
+      </div>
+      <span class="toolbar-title" id="random-title" style="display:none;">Random N</span>
+      <div class="form-group" id="random-box" style="display:none;">
+        <input type="number" id="random-n" value="24" min="1" max="500">
+      </div>
+      <span class="toolbar-title" id="offset-title">Offset</span>
+      <div class="form-group" id="offset-box">
+        <input type="number" id="offset" value="0" min="0">
+      </div>
+      <span class="toolbar-title" id="limit-title">Samples per page</span>
+      <div class="form-group" id="limit-box">
+        <select id="limit">
+          <option value="24">24</option>
+          <option value="48">48</option>
+          <option value="96">96</option>
+          <option value="120">120</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" id="btn-load">Load samples</button>
+    </div>
+    <div class="sample-grid" id="sample-grid"></div>
+  </div>
+</section>
+
+<script>
+// ── Corruption preview ─────────────────────────────────────────────────────
+var CORRUPTION_SHIFTS = [
+  { id: 'id',    label: 'Original' },
+  { id: 'blur',  label: 'Blur' },
+  { id: 'jpeg',  label: 'JPEG' },
+  { id: 'noise', label: 'Noise' },
+  { id: 'color', label: 'Color shift' },
+];
+var CORRUPTION_SEVERITIES = [1, 3, 5];
+var IMG_SIZE = 192;
+
+function corrGetSplit() { return document.getElementById('corr-split').value; }
+function corrGetIdx()   { return parseInt(document.getElementById('corr-idx').value, 10) || 0; }
+
+function corrSetStatus(msg) {
+  var el = document.getElementById('corr-status');
+  if (el) el.textContent = msg;
+}
+
+function corrBuildTable(split, idx) {
+  var thead = document.getElementById('corr-thead');
+  var tbody = document.getElementById('corr-tbody');
+  if (!thead || !tbody) return;
+
+  // Header: Original | Blur | JPEG | Noise | Color shift
+  var headerHtml = '<tr><th style="color:var(--muted);font-size:0.82rem;padding:4px 8px;text-align:center;">Severity</th>';
+  CORRUPTION_SHIFTS.forEach(function(s) {
+    var accent = s.id === 'id' ? 'var(--accent,#5b8dee)' : 'var(--text,#ccc)';
+    headerHtml += '<th style="color:' + accent + ';font-size:0.85rem;padding:4px 12px;text-align:center;">' + s.label + '</th>';
+  });
+  headerHtml += '</tr>';
+  thead.innerHTML = headerHtml;
+
+  // Rows: one per severity (original column has no severity — same for all rows)
+  var bodyHtml = '';
+  CORRUPTION_SEVERITIES.forEach(function(sev) {
+    bodyHtml += '<tr>';
+    // Severity label cell
+    var sevLabel = sev === 1 ? 'Mild (1)' : sev === 3 ? 'Medium (3)' : 'Severe (5)';
+    bodyHtml += '<td style="color:var(--muted);font-size:0.82rem;padding:4px 8px;text-align:right;vertical-align:middle;white-space:nowrap;">' + sevLabel + '</td>';
+    CORRUPTION_SHIFTS.forEach(function(s) {
+      var url = '/api/dataset/' + split + '/sample/' + idx;
+      if (s.id !== 'id') {
+        url += '/corrupted?shift=' + s.id + '&severity=' + sev + '&size=' + IMG_SIZE;
+      }
+      var border = s.id === 'id' ? '2px solid var(--accent,#5b8dee)' : '1px solid var(--border,#333)';
+      bodyHtml += '<td style="padding:4px;">'
+        + '<img src="' + url + '" width="' + IMG_SIZE + '" height="' + IMG_SIZE + '" '
+        + 'style="display:block;border-radius:4px;border:' + border + ';background:#222;" '
+        + 'loading="lazy" alt="' + s.label + ' sev' + sev + '">'
+        + '</td>';
+    });
+    bodyHtml += '</tr>';
+  });
+  tbody.innerHTML = bodyHtml;
+  document.getElementById('corr-table-wrap').style.display = 'block';
+}
+
+function corrApply() {
+  var split = corrGetSplit();
+  var idx = corrGetIdx();
+  corrSetStatus('Loading ' + CORRUPTION_SHIFTS.length + ' × ' + CORRUPTION_SEVERITIES.length + ' images for sample #' + idx + '…');
+  corrBuildTable(split, idx);
+  corrSetStatus('');
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  var applyBtn = document.getElementById('corr-apply-btn');
+  var randomBtn = document.getElementById('corr-random-btn');
+  if (applyBtn) applyBtn.onclick = corrApply;
+  if (randomBtn) randomBtn.onclick = function() {
+    var max = 32767;
+    document.getElementById('corr-idx').value = Math.floor(Math.random() * (max + 1));
+    corrApply();
+  };
+  // Show default sample on load
+  corrApply();
+});
+
+// ── Dataset meta ───────────────────────────────────────────────────────────
+var DATASET_META = {};
+
+function getSelectedDatasetId() {
+  var el = document.getElementById('dataset-select');
+  return (el && el.value) ? el.value : 'pcam';
+}
+
+function updateResources() {
+  var datasetId = getSelectedDatasetId();
+  var meta = DATASET_META[datasetId];
+  var box = document.getElementById('resources-box');
+  if (!box || !meta) return;
+
+  var browseText = (meta.can_browse === true)
+    ? 'Patch preview is available in this web application.'
+    : 'Patch preview is not available in this web application yet (download is supported).';
+
+  var links = [];
+  if (meta.resource_url) links.push('<a href="' + meta.resource_url + '" target="_blank" rel="noopener">Dataset resource</a>');
+  if (meta.download_url && meta.download_url !== meta.resource_url) links.push('<a href="' + meta.download_url + '" target="_blank" rel="noopener">Download</a>');
+  if (links.length === 0) links = ['—'];
+
+  box.innerHTML =
+    '<p><strong>' + meta.name + '</strong></p>' +
+    '<p style="margin-top:0.35rem;color:var(--muted);">' + (meta.description || '') + '</p>' +
+    '<p style="margin-top:0.5rem;">' + browseText + '</p>' +
+    '<p style="margin-top:0.5rem;">' + links.join(' · ') + '</p>';
+}
+
+function loadDatasetsThen(callback) {
+  fetch('/api/datasets')
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      var sel = document.getElementById('dataset-select');
+      if (!sel) return;
+      var defaultId = (d.default || 'pcam');
+      DATASET_META = {};
+      (d.datasets || []).forEach(function(ds) { DATASET_META[ds.id] = ds; });
+      sel.innerHTML = (d.datasets || []).map(function(ds) {
+        return '<option value="' + ds.id + '">' + ds.name + '</option>';
+      }).join('');
+      sel.value = defaultId;
+      updateResources();
+      if (callback) callback();
+    })
+    .catch(function() {
+      var box = document.getElementById('resources-box');
+      if (box) box.innerHTML = '<p style="color:var(--muted);">Failed to load dataset metadata.</p>';
+      if (callback) callback();
+    });
+}
+
+function isBrowseEnabled(datasetId) {
+  var id = datasetId || getSelectedDatasetId();
+  return (DATASET_META[id] && DATASET_META[id].can_browse === true);
+}
+
+function loadVerify() {
+  var datasetId = getSelectedDatasetId();
+  if (!isBrowseEnabled(datasetId)) {
+    var box = document.getElementById('verify-box');
+    if (box) box.innerHTML = '<p style="color:var(--muted);">Verification and preview are not yet available for this dataset in the current UI.</p>';
+    return;
+  }
+  fetch('/api/dataset/verify?dataset=' + encodeURIComponent(datasetId)).then(function(r) { return r.json(); }).then(function(d) {
+    var box = document.getElementById('verify-box');
+    if (!box) return;
+    if (d.all_labeled === true && d.datasets && d.datasets.length) {
+      var parts = d.datasets.map(function(s) {
+        if (s.error) return s.split + ': error';
+        var sum = (s.count_normal || 0) + (s.count_metastasis || 0);
+        var ok = sum === s.size ? '✓' : '✗';
+        return s.split + ': ' + s.size.toLocaleString() + ' total, ' + (s.count_normal || 0).toLocaleString() + ' normal + ' + (s.count_metastasis || 0).toLocaleString() + ' metastasis = ' + sum.toLocaleString() + ' ' + ok;
+      });
+      box.innerHTML = '<p><strong>All splits fully labeled.</strong></p><p style="font-size:0.9rem;color:var(--muted);">' + parts.join('<br>') + '</p>';
+    } else {
+      box.innerHTML = '<p style="color:var(--error, #c00);">Verification did not pass for one or more splits.</p>';
+    }
+  }).catch(function() {
+    var box = document.getElementById('verify-box');
+    if (box) box.innerHTML = '<p>Could not load verification results.</p>';
+  });
+}
+loadVerify();
+
+function loadStats() {
+  var tbody = document.querySelector('#stats-table tbody');
+  var splits = ['train','val','test'];
+  if (!isBrowseEnabled(getSelectedDatasetId())) {
+    if (tbody) tbody.innerHTML = '<tr><td colspan="5">Stats not implemented for this dataset yet.</td></tr>';
+    return;
+  }
+  Promise.all(splits.map(function(split) {
+    var datasetId = getSelectedDatasetId();
+    return fetch('/api/dataset/' + split + '/stats?dataset=' + encodeURIComponent(datasetId))
+      .then(function(r) { return r.json(); })
+      .then(function(d) { return { split: split, d: d }; });
+  })).then(function(results) {
+    tbody.innerHTML = results.map(function(r) {
+      var d = r.d;
+      if (d.error) return '<tr><td>' + r.split + '</td><td colspan="4">' + d.error + '</td></tr>';
+      var ratio = d.count_normal != null && d.count_metastasis ? (d.count_normal / d.count_metastasis).toFixed(2) : '—';
+      return '<tr><td>' + r.split + '</td><td>' + d.size.toLocaleString() + '</td><td>' + (d.count_normal != null ? d.count_normal.toLocaleString() : '—') + '</td><td>' + (d.count_metastasis != null ? d.count_metastasis.toLocaleString() : '—') + '</td><td>' + ratio + '</td></tr>';
+    }).join('');
+  }).catch(function() { tbody.innerHTML = '<tr><td colspan="5">Could not load dataset statistics.</td></tr>'; });
+}
+
+function loadSamples() {
+  var split = document.getElementById('split-select').value;
+  var labelFilter = document.getElementById('label-filter').value;
+  var offset = parseInt(document.getElementById('offset').value, 10) || 0;
+  var limit = parseInt(document.getElementById('limit').value, 10) || 24;
+  var mode = document.getElementById('preview-mode') ? document.getElementById('preview-mode').value : 'offset';
+  var randomN = parseInt(document.getElementById('random-n') ? document.getElementById('random-n').value : limit, 10) || limit;
+  var datasetId = getSelectedDatasetId();
+  var grid = document.getElementById('sample-grid');
+  grid.innerHTML = '<p>Loading…</p>';
+
+  if (!isBrowseEnabled(datasetId)) {
+    grid.innerHTML = '<p style="color:var(--muted);margin:0;">Download is available, but patch preview is not yet supported for this dataset.</p>';
+    return;
+  }
+
+  var url = '/api/dataset/' + split + '/samples?dataset=' + encodeURIComponent(datasetId) + '&label=' + labelFilter + '&offset=' + offset + '&limit=' + limit + '&mode=' + encodeURIComponent(mode);
+  if (mode === 'random') url += '&random_n=' + encodeURIComponent(randomN);
+  fetch(url).then(function(r) { return r.json(); }).then(function(res) {
+    var items = res.items || [];
+    if (items.length === 0) {
+      grid.innerHTML = '<p>No samples in this range. Adjust offset or filter.</p>';
+      return;
+    }
+    var html = '';
+    items.forEach(function(it) {
+      var idx = it.idx;
+      var label = it.label;
+      var labelText = (label === 1) ? 'Metastasis' : 'Normal';
+      var cls = (label === 1) ? 'positive' : 'negative';
+      html += '<div class="sample-cell"><img src="/api/dataset/' + split + '/sample/' + idx + '?dataset=' + encodeURIComponent(datasetId) + '" alt="' + idx + '"><div class="idx">#' + idx + '</div><div class="label ' + cls + '">' + labelText + '</div></div>';
+    });
+    grid.innerHTML = html;
+  }).catch(function() { grid.innerHTML = '<p>Could not load samples.</p>'; });
+}
+
+function initDatasetTab() {
+  document.getElementById('btn-load').onclick = loadSamples;
+  document.getElementById('split-select').onchange = loadSamples;
+  document.getElementById('label-filter').onchange = loadSamples;
+  document.getElementById('limit').onchange = loadSamples;
+  var dsSel = document.getElementById('dataset-select');
+  if (dsSel) dsSel.onchange = function() {
+    loadVerify();
+    loadStats();
+    loadSamples();
+    updateResources();
+  };
+
+  var updatePreviewModeUI = function() {
+    var pm = document.getElementById('preview-mode') ? document.getElementById('preview-mode').value : 'offset';
+    var randomTitle = document.getElementById('random-title');
+    var randomBox = document.getElementById('random-box');
+    var offsetTitle = document.getElementById('offset-title');
+    var limitTitle = document.getElementById('limit-title');
+    var offsetBox = document.getElementById('offset-box');
+    var limitBox = document.getElementById('limit-box');
+    var showRandom = (pm === 'random');
+    if (randomTitle) randomTitle.style.display = showRandom ? 'inline-block' : 'none';
+    if (randomBox) randomBox.style.display = showRandom ? 'block' : 'none';
+    if (offsetTitle) offsetTitle.style.display = showRandom ? 'none' : 'inline-block';
+    if (limitTitle) limitTitle.style.display = showRandom ? 'none' : 'inline-block';
+    if (offsetBox) offsetBox.style.display = showRandom ? 'none' : 'block';
+    if (limitBox) limitBox.style.display = showRandom ? 'none' : 'block';
+  };
+
+  var pmSel = document.getElementById('preview-mode');
+  if (pmSel) pmSel.onchange = function() { updatePreviewModeUI(); loadSamples(); };
+  updatePreviewModeUI();
+
+  loadVerify();
+  loadStats();
+  loadSamples();
+  updateResources();
+}
+
+loadDatasetsThen(initDatasetTab);
+</script>
+{% endblock %}
