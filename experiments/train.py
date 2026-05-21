@@ -64,7 +64,8 @@ def get_config():
 
 def parse_args():
     p = argparse.ArgumentParser()
-    p.add_argument("--dataset", type=str, default="pcam", choices=["pcam"], help="Dataset to use for training")
+    p.add_argument("--dataset", type=str, default="pcam", choices=["pcam", "nct_crc_he_100k"], help="Dataset to use for training")
+    p.add_argument("--run_name", type=str, default=None, help="Optional short name tag included in checkpoint folder name")
     p.add_argument("--model_id", type=str, default=None, help="Hugging Face image model id")
     p.add_argument("--epochs", type=int, default=None, help="Number of epochs")
     p.add_argument("--n_train", type=int, default=None, help="Max training samples (subset)")
@@ -146,10 +147,8 @@ def main():
     _configure_cuda_backends()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # Data (dataset selection: currently only PCAM)
+    # Data (dataset selection)
     dataset_id = args.dataset or cfg.get("data", {}).get("dataset", "pcam")
-    if dataset_id != "pcam":
-        raise ValueError(f"Unsupported dataset: {dataset_id}. Only 'pcam' is supported.")
     root = REPO_ROOT / cfg["data"]["root"]
     image_size = tuple(cfg["data"]["image_size"])
     transform = transforms.Compose([
@@ -157,20 +156,37 @@ def main():
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
-    train_ds_full = PCAM(root=str(root), split="train", download=False, transform=transform)
-    val_ds_full = PCAM(root=str(root), split="val", download=False, transform=transform)
-    n_train = cfg.get("_n_train")
-    n_val = cfg.get("_n_val")
-    if n_train is None:
-        n_train = min(len(train_ds_full), 10_000)
+
+    n_train_cfg = cfg.get("_n_train")
+    n_val_cfg = cfg.get("_n_val")
+
+    if dataset_id == "pcam":
+        train_ds_full = PCAM(root=str(root), split="train", download=False, transform=transform)
+        val_ds_full = PCAM(root=str(root), split="val", download=False, transform=transform)
+        n_train = min(n_train_cfg if n_train_cfg is not None else 10_000, len(train_ds_full))
+        n_val = min(n_val_cfg if n_val_cfg is not None else 2_000, len(val_ds_full))
+        train_ds = Subset(train_ds_full, range(n_train))
+        val_ds = Subset(val_ds_full, range(n_val))
+    elif dataset_id == "nct_crc_he_100k":
+        from uncertainty_lab.data.nct_crc import NCTCRCDataset
+        import math
+        full_ds = NCTCRCDataset(root, binary=True, transform=transform)
+        n_full = len(full_ds)
+        # Use 80/20 train/val split from the flat dataset
+        n_train_max = n_train_cfg if n_train_cfg is not None else min(10_000, math.floor(n_full * 0.8))
+        n_val_max = n_val_cfg if n_val_cfg is not None else min(2_000, math.floor(n_full * 0.2))
+        import random as _rnd
+        _rnd.seed(cfg.get("seed", 42))
+        all_idx = list(range(n_full))
+        _rnd.shuffle(all_idx)
+        train_idx = all_idx[:min(n_train_max, math.floor(n_full * 0.8))]
+        val_idx = all_idx[math.floor(n_full * 0.8):math.floor(n_full * 0.8) + min(n_val_max, math.floor(n_full * 0.2))]
+        train_ds = Subset(full_ds, train_idx)
+        val_ds = Subset(full_ds, val_idx)
+        n_train, n_val = len(train_ds), len(val_ds)
     else:
-        n_train = min(n_train, len(train_ds_full))
-    if n_val is None:
-        n_val = min(len(val_ds_full), 2_000)
-    else:
-        n_val = min(n_val, len(val_ds_full))
-    train_ds = Subset(train_ds_full, range(n_train))
-    val_ds = Subset(val_ds_full, range(n_val))
+        raise ValueError(f"Unsupported dataset: {dataset_id}. Choose 'pcam' or 'nct_crc_he_100k'.")
+
     print(f"Dataset: {dataset_id}. Train samples: {n_train}, Val samples: {n_val}")
 
     # Run output dir (named by key hyperparams for easier experiment tracking)
@@ -181,9 +197,14 @@ def main():
     lr = float(cfg["train"]["lr"])
     model_slug = _slug_model_id(cfg["model"]["model_id"])
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    name_tag = ""
+    if getattr(args, "run_name", None) and str(args.run_name).strip():
+        import re as _re
+        slug = _re.sub(r"[^a-z0-9_-]+", "-", str(args.run_name).strip().lower()).strip("-")[:32]
+        name_tag = f"_{slug}"
     auto_name = (
         f"run_{dataset_id}_{model_slug}"
-        f"_e{epochs}_nt{n_train}_nv{n_val}_bs{bs}_lr{_fmt_lr(lr)}_{ts}"
+        f"_e{epochs}_nt{n_train}_nv{n_val}_bs{bs}_lr{_fmt_lr(lr)}_{ts}{name_tag}"
     )
     if args.run_dir:
         run_dir = Path(args.run_dir)

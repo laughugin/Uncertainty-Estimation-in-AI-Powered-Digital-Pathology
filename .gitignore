@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+# Data and large files (download separately)
+data/raw/
+checkpoints/
+
+# Generated evaluation outputs (reproducible via experiments/)
+runs/
+
+# LaTeX build artifacts
+thesis/**/*.aux
+thesis/**/*.log
+thesis/**/*.out
+thesis/**/*.toc
+thesis/**/*.lof
+thesis/**/*.lot
+thesis/**/*.fls
+thesis/**/*.fdb_latexmk
+thesis/**/*.synctex.gz
+thesis/**/*.bbl
+thesis/**/*.bcf
+thesis/**/*.blg
+thesis/**/*.run.xml
+
+# Overleaf exports
+thesis_overleaf/
+thesis_overleaf (2)/
+thesis_overleaf.zip
+
+# AI tooling — not part of the project
+.cursor/
+AGENTS.md
+thesis_plain_english_guide.txt
+
+# Misc
+.DS_Store
+*.swp
+*.swo
+.env

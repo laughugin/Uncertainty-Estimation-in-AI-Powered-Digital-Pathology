@@ -2,32 +2,15 @@
 {% block title %}Run — Uncertainty in Digital Pathology{% endblock %}
 {% block content %}
 <h1>Run</h1>
-<p class="page-subtitle">
-  Configure and execute reproducible training runs with live monitoring. Model and dataset are documented in
-  <a href="{{ url_for('project') }}#references">References</a>. Each run writes checkpoints and a metrics summary.
-</p>
+<p class="page-subtitle">Configure and execute training runs with live monitoring.</p>
+
 
 <section class="section">
-  <div class="section-num">0. Experimental intent</div>
-  <div class="card">
-    <div class="info-box">
-      <p><strong>Purpose</strong>: produce traceable checkpoints for uncertainty evaluation and thesis reporting.</p>
-      <ul>
-        <li><strong>Output artifacts</strong>: `best.pt`, `last.pt`, and `metrics.json` under `checkpoints/run_*`.</li>
-        <li><strong>Reproducibility</strong>: keep model, subset size, epochs, LR, and batch size consistent with reported results.</li>
-      </ul>
-    </div>
-  </div>
-</section>
-
-<section class="section">
-  <div class="section-num">1. Train model (live log)</div>
+  <div class="section-num">Train model</div>
   <div class="card" style="border-left:4px solid var(--accent);">
     <p>
       <strong>Model:</strong> Vision Transformer (ViT-B/16, 224×224).
-      <strong>Dataset:</strong> Select the dataset and sample limits below.
-      Each run is saved under <code>checkpoints/run_&lt;timestamp&gt;/</code> with <code>best.pt</code> and <code>metrics.json</code>.
-      For citations, see the <a href="{{ url_for('project') }}">Project</a> page and the canonical files in <code>references/</code>.
+      Each run is saved under <code>checkpoints/run_&lt;timestamp&gt;_&lt;name&gt;/</code> with <code>best.pt</code> and <code>metrics.json</code>.
     </p>
     <div class="form-row" style="flex-wrap:wrap;gap:1rem;margin-bottom:1rem;">
       <div class="form-group">
@@ -40,15 +23,16 @@
         <label for="train-dataset">Dataset</label>
         <select id="train-dataset" title="Dataset used for training">
           <option value="pcam">Patch Camelyon (PCAM)</option>
+          <option value="nct_crc_he_100k">NCT-CRC-HE-100K</option>
         </select>
       </div>
-      <div class="form-group">
-        <label for="train-n-train">Train samples</label>
-        <input type="number" id="train-n-train" value="2000" min="100" max="262144" placeholder="2000" title="PCAM train max: 262,144">
+      <div class="form-group" id="train-n-train-group">
+        <label for="train-n-train">Train samples <span id="train-n-hint" style="font-weight:normal;color:var(--muted);font-size:0.8rem;">(PCAM max: 262,144)</span></label>
+        <input type="number" id="train-n-train" value="2000" min="100" max="262144" placeholder="2000">
       </div>
-      <div class="form-group">
-        <label for="train-n-val">Val samples</label>
-        <input type="number" id="train-n-val" value="500" min="100" max="32768" placeholder="500" title="PCAM val max: 32,768">
+      <div class="form-group" id="train-n-val-group">
+        <label for="train-n-val">Val samples <span id="train-v-hint" style="font-weight:normal;color:var(--muted);font-size:0.8rem;">(PCAM max: 32,768)</span></label>
+        <input type="number" id="train-n-val" value="500" min="100" max="32768" placeholder="500">
       </div>
       <div class="form-group">
         <label for="train-epochs">Epochs</label>
@@ -62,18 +46,21 @@
         <label for="train-batch">Batch size</label>
         <input type="number" id="train-batch" value="32" min="1" style="width:4rem;">
       </div>
+      <div class="form-group">
+        <label for="train-run-name">Run name <span style="color:var(--muted);font-weight:normal;">(optional tag)</span></label>
+        <input type="text" id="train-run-name" placeholder="e.g. baseline, ablation-1" style="width:12rem;" maxlength="32" title="Short tag appended to checkpoint folder name for identification">
+      </div>
     </div>
     <p style="margin:0 0 0.5rem;font-size:0.8rem;color:var(--muted);">
       Recommended quick run: 2 epochs / 2k train / 500 val (~2–5 min on GPU).
       Medium: 3 epochs / 10k train / 2k val.
       Full: 5+ epochs / 262k train.
     </p>
-    <div class="info-box">
-      <p><strong>Guidance</strong>: quick runs verify pipeline; thesis comparisons should use consistent higher-sample settings.</p>
-    </div>
+
     <p style="margin:0 0 0.5rem;font-size:0.8rem;"><strong>Device:</strong> <span id="device-info">Loading…</span> <span id="device-note" style="color:var(--muted);"></span></p>
     <div style="display:flex;gap:0.75rem;flex-wrap:wrap;margin-bottom:0.75rem;">
       <button class="btn" id="btn-download-pcam" title="Downloads PCAM (train/val/test) to data/raw/">Download PCAM</button>
+      <button class="btn" id="btn-download-nct" title="Downloads NCT-CRC-HE-100K (Zenodo zip) to data/raw/">Download NCT-CRC-HE-100K</button>
       <button class="btn" id="btn-cache-model" title="Downloads and caches the Hugging Face ViT model locally.">Cache model</button>
     </div>
     <div class="progress-wrap" aria-label="Training progress">
@@ -86,12 +73,9 @@
 </section>
 
 <section class="section">
-  <div class="section-num">2. Previous runs</div>
+  <div class="section-num">Previous runs</div>
   <div class="card">
     <p>Saved runs and their validation accuracy. You can use a run on the <a href="{{ url_for('evaluate_page') }}">Results</a> page.</p>
-    <div class="info-box">
-      <p><strong>Selection rule</strong>: prefer runs with stable validation accuracy and complete logs/metadata.</p>
-    </div>
     <div class="table-wrap">
       <table class="data-table" id="runs-table">
         <thead>
@@ -145,18 +129,45 @@
       if (d.default) sel.value = d.default;
     }
   }).catch(function() {});
+  var DATASET_META_RUN = {};
+
+  function updateDatasetHints() {
+    var sel = document.getElementById('train-dataset');
+    if (!sel) return;
+    var isNct = (sel.value === 'nct_crc_he_100k');
+    var nh = document.getElementById('train-n-hint');
+    var vh = document.getElementById('train-v-hint');
+    var valGroup = document.getElementById('train-n-val-group');
+    var nt = document.getElementById('train-n-train');
+    if (isNct) {
+      if (nh) nh.textContent = '(NCT-CRC max: 100,000)';
+      if (nt) { nt.max = 100000; if (parseInt(nt.value,10) > 100000) nt.value = 80000; }
+      if (valGroup) valGroup.style.display = 'none';
+    } else {
+      if (nh) nh.textContent = '(PCAM max: 262,144)';
+      if (vh) vh.textContent = '(PCAM max: 32,768)';
+      if (nt) nt.max = 262144;
+      var nv = document.getElementById('train-n-val'); if (nv) nv.max = 32768;
+      if (valGroup) valGroup.style.display = '';
+    }
+  }
+
   fetch('/api/datasets').then(function(r) { return r.json(); }).then(function(d) {
     var sel = document.getElementById('train-dataset');
     if (sel && d.datasets && d.datasets.length) {
       var trainable = (d.datasets || []).filter(function(ds) { return ds.can_train === true; });
       sel.innerHTML = trainable.map(function(ds) { return '<option value="' + ds.id + '">' + ds.name + '</option>'; }).join('');
+      trainable.forEach(function(ds) { DATASET_META_RUN[ds.id] = ds; });
       var def = trainable.find(function(ds) { return ds.id === (d.default || 'pcam'); }) || trainable[0];
-      if (def) {
-        var nt = document.getElementById('train-n-train'); if (nt) nt.max = def.max_train || 262144;
-        var nv = document.getElementById('train-n-val'); if (nv) nv.max = def.max_val || 32768;
-      }
+      if (def) sel.value = def.id;
+      updateDatasetHints();
+      sel.onchange = updateDatasetHints;
     }
-  }).catch(function() {});
+  }).catch(function() {
+    var sel = document.getElementById('train-dataset');
+    if (sel) sel.onchange = updateDatasetHints;
+    updateDatasetHints();
+  });
   loadRuns();
 
   var trainLog = document.getElementById('train-log');
@@ -285,11 +296,20 @@
     });
   }
 
-  // Setup buttons (minimal UI, but still one-click downloads/caching)
-  var btnDownload = document.getElementById('btn-download-pcam');
-  if (btnDownload) {
-    btnDownload.onclick = function() { this.disabled = true; fetch('/api/run', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({task:'download_pcam'})}).then(r=>r.json()).then(d=>{appendLine('[download_pcam] ' + (d.ok ? 'OK' : 'ERROR')); if (d.log) appendLine(d.log); this.disabled=false; if(!d.ok) trainLog.classList.add('error');}).catch(e=>{appendLine('[download_pcam] Error: '+e.message); this.disabled=false; trainLog.classList.add('error');}); };
+  // Setup buttons
+  function makeDownloadBtn(btnId, taskId) {
+    var btn = document.getElementById(btnId);
+    if (!btn) return;
+    btn.onclick = function() {
+      this.disabled = true;
+      fetch('/api/run', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({task:taskId})})
+        .then(function(r){return r.json();})
+        .then(function(d){ appendLine('['+taskId+'] '+(d.ok?'OK':'ERROR')); if(d.log) appendLine(d.log); btn.disabled=false; if(!d.ok && trainLog) trainLog.classList.add('error'); })
+        .catch(function(e){ appendLine('['+taskId+'] Error: '+e.message); btn.disabled=false; if(trainLog) trainLog.classList.add('error'); });
+    };
   }
+  makeDownloadBtn('btn-download-pcam', 'download_pcam');
+  makeDownloadBtn('btn-download-nct', 'download_nct_crc_he_100k');
   var btnCache = document.getElementById('btn-cache-model');
   if (btnCache) {
     btnCache.onclick = function() {
@@ -316,6 +336,7 @@
     var v = document.getElementById('train-n-val'); if (v && v.value) payload.n_val = parseInt(v.value, 10);
     var lr = document.getElementById('train-lr'); if (lr && lr.value) { var x = parseFloat(lr.value); if (!isNaN(x)) payload.lr = x; }
     var b = document.getElementById('train-batch'); if (b && b.value) payload.batch_size = parseInt(b.value, 10);
+    var rn = document.getElementById('train-run-name'); if (rn && rn.value && rn.value.trim()) payload.run_name = rn.value.trim();
 
     fetch('/api/train/start', {
       method: 'POST',

@@ -2,24 +2,11 @@
 {% block title %}Dataset — Uncertainty in Digital Pathology{% endblock %}
 {% block content %}
 <h1>Dataset</h1>
-<p class="page-subtitle">PCAM integrity and preview workspace for thesis documentation.</p>
+<p class="page-subtitle">Browse dataset samples and verify data integrity.</p>
+
 
 <section class="section">
-  <div class="section-num">0. Scope and rationale</div>
-  <div class="card">
-    <div class="info-box">
-      <p><strong>Current scope</strong>: PCAM (patch-level binary task).</p>
-      <ul>
-        <li><strong>Why this page is needed</strong>: uncertainty metrics require validated labels and splits.</li>
-        <li><strong>Label convention</strong>: normal = 0, metastasis = 1.</li>
-        <li><strong>Reference</strong>: <a href="https://patchcamelyon.grand-challenge.org/Download/" target="_blank" rel="noopener noreferrer">Patch Camelyon resource</a>.</li>
-      </ul>
-    </div>
-  </div>
-</section>
-
-<section class="section">
-  <div class="section-num">1. Label verification</div>
+  <div class="section-num">Label verification</div>
   <div class="card">
     <p style="color:var(--muted);">Split-wise integrity check: all samples should have valid binary labels.</p>
     <div id="verify-box" style="margin-top:0.5rem;">Loading…</div>
@@ -27,7 +14,7 @@
 </section>
 
 <section class="section">
-  <div class="section-num">2. Dataset statistics</div>
+  <div class="section-num">Dataset statistics</div>
   <div class="card">
     <p>Class counts and ratio per split for imbalance assessment.</p>
     <table class="data-table" id="stats-table">
@@ -42,14 +29,11 @@
       </thead>
       <tbody><tr><td colspan="5">Loading…</td></tr></tbody>
     </table>
-    <div class="info-box">
-      <p><strong>Interpretation</strong>: PR-AUC is particularly informative under stronger class imbalance.</p>
-    </div>
   </div>
 </section>
 
 <section class="section">
-  <div class="section-num">3. Resources (download & reference)</div>
+  <div class="section-num">Resources</div>
   <div class="card">
     <p>Canonical links for dataset access and citation context.</p>
     <div id="resources-box">Loading…</div>
@@ -57,7 +41,7 @@
 </section>
 
 <section class="section">
-  <div class="section-num">4. Corruption filter preview</div>
+  <div class="section-num">Corruption preview</div>
   <div class="card">
     <div class="info-box">
       <p><strong>What this shows</strong>: the four synthetic corruptions used in shift/OOD evaluation — applied to real PCAM patches at severity levels 1 (mild), 3 (medium), and 5 (severe). These are the exact same transforms run during experiment evaluation.</p>
@@ -111,7 +95,7 @@
 </section>
 
 <section class="section">
-  <div class="section-num">5. Sample browser</div>
+  <div class="section-num">Sample browser</div>
   <div class="card">
     <div class="info-box">
       <p><strong>Use case</strong>: visual quality control of patches and labels before training/evaluation.</p>
@@ -122,10 +106,11 @@
       <div class="form-group">
         <select id="dataset-select">
           <option value="pcam">Patch Camelyon (PCAM)</option>
+          <option value="nct_crc_he_100k">NCT-CRC-HE-100K</option>
         </select>
       </div>
-      <span class="toolbar-title">Split</span>
-      <div class="form-group">
+      <span class="toolbar-title" id="split-title">Split</span>
+      <div class="form-group" id="split-group">
         <select id="split-select">
           <option value="train">Training</option>
           <option value="val">Validation</option>
@@ -136,8 +121,8 @@
       <div class="form-group">
         <select id="label-filter">
           <option value="all">All</option>
-          <option value="0">Normal (0)</option>
-          <option value="1">Metastasis (1)</option>
+          <option value="0" id="label-opt-0">Normal (0)</option>
+          <option value="1" id="label-opt-1">Metastasis (1)</option>
         </select>
       </div>
       <span class="toolbar-title">Preview mode</span>
@@ -293,6 +278,7 @@ function loadDatasetsThen(callback) {
         return '<option value="' + ds.id + '">' + ds.name + '</option>';
       }).join('');
       sel.value = defaultId;
+      updateSplitVisibility();
       updateResources();
       if (callback) callback();
     })
@@ -337,14 +323,24 @@ function loadVerify() {
 loadVerify();
 
 function loadStats() {
+  var datasetId = getSelectedDatasetId();
+  var isNct = (datasetId === 'nct_crc_he_100k');
   var tbody = document.querySelector('#stats-table tbody');
-  var splits = ['train','val','test'];
-  if (!isBrowseEnabled(getSelectedDatasetId())) {
-    if (tbody) tbody.innerHTML = '<tr><td colspan="5">Stats not implemented for this dataset yet.</td></tr>';
+  var thead = document.querySelector('#stats-table thead tr');
+  if (!isBrowseEnabled(datasetId)) {
+    if (tbody) tbody.innerHTML = '<tr><td colspan="5">Stats not available for this dataset.</td></tr>';
     return;
   }
+  // Update column headers for NCT-CRC (TUM/Non-TUM) vs PCAM (Normal/Metastasis)
+  if (thead) {
+    if (isNct) {
+      thead.innerHTML = '<th>Split</th><th>Total</th><th>Non-TUM (0)</th><th>TUM (1)</th><th>Ratio N/T</th>';
+    } else {
+      thead.innerHTML = '<th>Split</th><th>Total</th><th>Normal (0)</th><th>Metastasis (1)</th><th>Ratio N/M</th>';
+    }
+  }
+  var splits = isNct ? ['train'] : ['train','val','test'];
   Promise.all(splits.map(function(split) {
-    var datasetId = getSelectedDatasetId();
     return fetch('/api/dataset/' + split + '/stats?dataset=' + encodeURIComponent(datasetId))
       .then(function(r) { return r.json(); })
       .then(function(d) { return { split: split, d: d }; });
@@ -352,8 +348,9 @@ function loadStats() {
     tbody.innerHTML = results.map(function(r) {
       var d = r.d;
       if (d.error) return '<tr><td>' + r.split + '</td><td colspan="4">' + d.error + '</td></tr>';
+      var splitLabel = isNct ? 'all' : r.split;
       var ratio = d.count_normal != null && d.count_metastasis ? (d.count_normal / d.count_metastasis).toFixed(2) : '—';
-      return '<tr><td>' + r.split + '</td><td>' + d.size.toLocaleString() + '</td><td>' + (d.count_normal != null ? d.count_normal.toLocaleString() : '—') + '</td><td>' + (d.count_metastasis != null ? d.count_metastasis.toLocaleString() : '—') + '</td><td>' + ratio + '</td></tr>';
+      return '<tr><td>' + splitLabel + '</td><td>' + d.size.toLocaleString() + '</td><td>' + (d.count_normal != null ? d.count_normal.toLocaleString() : '—') + '</td><td>' + (d.count_metastasis != null ? d.count_metastasis.toLocaleString() : '—') + '</td><td>' + ratio + '</td></tr>';
     }).join('');
   }).catch(function() { tbody.innerHTML = '<tr><td colspan="5">Could not load dataset statistics.</td></tr>'; });
 }
@@ -382,16 +379,43 @@ function loadSamples() {
       grid.innerHTML = '<p>No samples in this range. Adjust offset or filter.</p>';
       return;
     }
+    var isNct = (datasetId === 'nct_crc_he_100k');
     var html = '';
     items.forEach(function(it) {
       var idx = it.idx;
       var label = it.label;
-      var labelText = (label === 1) ? 'Metastasis' : 'Normal';
+      var labelText = isNct ? (label === 1 ? 'TUM' : 'Non-TUM') : (label === 1 ? 'Metastasis' : 'Normal');
       var cls = (label === 1) ? 'positive' : 'negative';
       html += '<div class="sample-cell"><img src="/api/dataset/' + split + '/sample/' + idx + '?dataset=' + encodeURIComponent(datasetId) + '" alt="' + idx + '"><div class="idx">#' + idx + '</div><div class="label ' + cls + '">' + labelText + '</div></div>';
     });
     grid.innerHTML = html;
   }).catch(function() { grid.innerHTML = '<p>Could not load samples.</p>'; });
+}
+
+function updateLabelNames() {
+  var dsId = getSelectedDatasetId();
+  var isNct = (dsId === 'nct_crc_he_100k');
+  var opt0 = document.getElementById('label-opt-0');
+  var opt1 = document.getElementById('label-opt-1');
+  if (opt0) opt0.textContent = isNct ? 'Non-TUM (0)' : 'Normal (0)';
+  if (opt1) opt1.textContent = isNct ? 'TUM (1)' : 'Metastasis (1)';
+}
+
+function updateSplitVisibility() {
+  var dsId = getSelectedDatasetId();
+  var isNct = (dsId === 'nct_crc_he_100k');
+  var splitTitle = document.getElementById('split-title');
+  var splitGroup = document.getElementById('split-group');
+  var splitSel = document.getElementById('split-select');
+  if (isNct) {
+    // NCT-CRC has no train/val/test split — hide the split selector
+    if (splitTitle) splitTitle.style.display = 'none';
+    if (splitGroup) splitGroup.style.display = 'none';
+    if (splitSel) splitSel.value = 'train'; // backend uses train as default for NCT-CRC
+  } else {
+    if (splitTitle) splitTitle.style.display = '';
+    if (splitGroup) splitGroup.style.display = '';
+  }
 }
 
 function initDatasetTab() {
@@ -401,6 +425,8 @@ function initDatasetTab() {
   document.getElementById('limit').onchange = loadSamples;
   var dsSel = document.getElementById('dataset-select');
   if (dsSel) dsSel.onchange = function() {
+    updateSplitVisibility();
+    updateLabelNames();
     loadVerify();
     loadStats();
     loadSamples();
@@ -428,6 +454,8 @@ function initDatasetTab() {
   if (pmSel) pmSel.onchange = function() { updatePreviewModeUI(); loadSamples(); };
   updatePreviewModeUI();
 
+  updateSplitVisibility();
+  updateLabelNames();
   loadVerify();
   loadStats();
   loadSamples();

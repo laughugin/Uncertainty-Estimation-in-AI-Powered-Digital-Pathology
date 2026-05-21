@@ -698,7 +698,7 @@ def plot_ece_under_shift(
     SEV_LABELS = {0: "Clean", 1: "Sev 1\n(mild)", 3: "Sev 3\n(med)", 5: "Sev 5\n(severe)"}
 
     n_shifts = len(SHIFT_TYPES)
-    fig, axes = plt.subplots(1, n_shifts, figsize=(13, 4.2), sharey=True)
+    fig, axes = plt.subplots(1, n_shifts, figsize=(13, 5.2), sharey=True)
     if n_shifts == 1:
         axes = [axes]
 
@@ -731,8 +731,10 @@ def plot_ece_under_shift(
             ax.set_ylabel(metric_key.upper())
     handles, labels = axes[0].get_legend_handles_labels()
     if handles:
-        fig.legend(handles, labels, loc="upper right", fontsize=9)
+        fig.legend(handles, labels, loc="lower center",
+                   bbox_to_anchor=(0.5, -0.08), ncol=len(labels), fontsize=9)
     fig.suptitle(title, fontsize=11)
+    fig.subplots_adjust(bottom=0.32)
     _finalize(fig, out_path)
 
 

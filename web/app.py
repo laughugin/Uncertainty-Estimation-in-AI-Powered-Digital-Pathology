@@ -73,15 +73,22 @@ def get_pcam(split: str):
     return _pcam_cache[split]
 
 
+_nct_dataset_cache: dict = {}
+
+
 def get_dataset(dataset_id: str, split: str):
-    """
-    Central dataset router.
-    Current implementation supports only `pcam` (thesis scaffold for future datasets).
-    """
+    """Central dataset router supporting pcam and nct_crc_he_100k."""
     dataset_id = (dataset_id or "pcam").strip().lower()
-    if dataset_id != "pcam":
-        raise ValueError(f"Unsupported dataset: {dataset_id}. Only 'pcam' is supported.")
-    return get_pcam(split)
+    if dataset_id == "pcam":
+        return get_pcam(split)
+    elif dataset_id == "nct_crc_he_100k":
+        from uncertainty_lab.data.nct_crc import NCTCRCDataset
+        if "nct" not in _nct_dataset_cache:
+            nct_root = REPO_ROOT / "data" / "raw"
+            _nct_dataset_cache["nct"] = NCTCRCDataset(nct_root, binary=True)
+        return _nct_dataset_cache["nct"]
+    else:
+        raise ValueError(f"Unsupported dataset: {dataset_id}")
 
 
 def get_config():
@@ -690,8 +697,25 @@ def api_dataset_stats(split):
     if split not in ("train", "val", "test"):
         return jsonify({"error": "Invalid split"}), 400
     dataset_id = request.args.get("dataset", "pcam")
+    if (dataset_id or "").strip().lower() == "nct_crc_he_100k":
+        try:
+            ds = get_dataset("nct_crc_he_100k", split)
+            all_labels = [s[1] for s in ds.samples]
+            n = len(all_labels)
+            n1 = sum(all_labels)
+            n0 = n - n1
+            return jsonify({
+                "split": "all (no split)",
+                "size": n,
+                "count_normal": n0,
+                "count_metastasis": n1,
+                "class_label_0": "Non-TUM",
+                "class_label_1": "TUM",
+            })
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
     if (dataset_id or "").strip().lower() != "pcam":
-        return jsonify({"error": "Dataset stats only implemented for 'pcam' in this repo."}), 501
+        return jsonify({"error": "Dataset stats only implemented for 'pcam' or 'nct_crc_he_100k'."}), 501
     global _dataset_stats_cache
     cache_key = (dataset_id, split)
     if cache_key not in _dataset_stats_cache:
@@ -720,8 +744,22 @@ def api_dataset_stats(split):
 def api_dataset_verify():
     """Verify that the configured dataset is fully labeled: for each split, size = count_normal + count_metastasis."""
     dataset_id = request.args.get("dataset", "pcam")
+    if (dataset_id or "").strip().lower() == "nct_crc_he_100k":
+        try:
+            ds = get_dataset("nct_crc_he_100k", "train")
+            from uncertainty_lab.data.nct_crc import NCT_CLASSES
+            n = len(ds)
+            class_counts = ds.class_counts
+            total = sum(class_counts.values())
+            return jsonify({
+                "datasets": [{"split": "all", "size": total, "count_normal": total - class_counts.get("TUM", 0), "count_metastasis": class_counts.get("TUM", 0), "all_labeled": True, "class_counts": class_counts}],
+                "all_labeled": True,
+                "note": "NCT-CRC-HE-100K has no train/val/test split — all 100K samples shown.",
+            })
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
     if (dataset_id or "").strip().lower() != "pcam":
-        return jsonify({"error": "Dataset verification only implemented for 'pcam' in this repo."}), 501
+        return jsonify({"error": "Dataset verification only implemented for 'pcam' or 'nct_crc_he_100k'."}), 501
     result = {"datasets": [], "all_labeled": True}
     for split in ("train", "val", "test"):
         try:
@@ -782,10 +820,11 @@ def api_datasets():
         {
             "id": "nct_crc_he_100k",
             "name": "NCT-CRC-HE-100K",
-            "description": "Trusted colorectal patch dataset (download available). Browsing/training not implemented yet.",
-            "splits": ["train", "val", "test"],
-            "can_browse": False,
-            "can_train": False,
+            "description": "100K colorectal H&E patches, 9 tissue classes. Binary mode: TUM (1) vs non-TUM (0). Used as OOD domain vs PCAM-trained models.",
+            "splits": ["all"],
+            "max_train": 100000,
+            "can_browse": True,
+            "can_train": True,
             "download_url": "https://zenodo.org/record/1214456",
             "resource_url": "https://zenodo.org/record/1214456",
         },
@@ -862,8 +901,34 @@ def api_dataset_samples(split):
 
     try:
         dataset_id_norm = (dataset_id or "").strip().lower()
+
+        if dataset_id_norm == "nct_crc_he_100k":
+            ds = get_dataset(dataset_id_norm, split)
+            size = len(ds)
+            all_labels = [s[1] for s in ds.samples]
+            if label_arg == "all":
+                if mode == "random":
+                    import random as _rnd
+                    sel = _rnd.sample(range(size), min(random_n, size))
+                else:
+                    start = min(offset, size)
+                    end = min(offset + limit, size)
+                    sel = list(range(start, end))
+            else:
+                target = int(label_arg)
+                pool = [i for i, l in enumerate(all_labels) if l == target]
+                if mode == "random":
+                    import random as _rnd
+                    sel = _rnd.sample(pool, min(random_n, len(pool)))
+                else:
+                    start = min(offset, len(pool))
+                    end = min(offset + limit, len(pool))
+                    sel = pool[start:end]
+            items = [{"idx": int(i), "label": int(all_labels[i])} for i in sel]
+            return jsonify({"split": split, "dataset": dataset_id, "items": items, "size": size})
+
         if dataset_id_norm != "pcam":
-            return jsonify({"error": f"Dataset browse only implemented for 'pcam' (requested: {dataset_id})"}), 501
+            return jsonify({"error": f"Dataset browse only implemented for 'pcam' or 'nct_crc_he_100k' (requested: {dataset_id})"}), 501
 
         # PCAM: use cached H5 label array for fast indexing + random sampling.
         pc = _pcam_labels_for_split(split)
@@ -1041,6 +1106,8 @@ def api_train_start():
         cmd.extend(["--lr", str(float(data["lr"]))])
     if data.get("batch_size") is not None:
         cmd.extend(["--batch_size", str(int(data["batch_size"]))])
+    if data.get("run_name") is not None and str(data.get("run_name")).strip():
+        cmd.extend(["--run_name", str(data["run_name"]).strip()])
     try:
         import queue as q
         proc_env = {**os.environ, "PYTHONUNBUFFERED": "1"}

@@ -2,18 +2,18 @@
 {% block title %}Project — Uncertainty in Digital Pathology{% endblock %}
 {% block content %}
 <h1>Project</h1>
-<p class="page-subtitle">Project scope and the canonical reference list used by the thesis and the web UI.</p>
+<p class="page-subtitle">Thesis context, uncertainty methods, and literature references.</p>
 
 <section class="section">
-  <div class="section-num">1. Uncertainty methods</div>
+  <div class="section-num">Uncertainty methods</div>
   <div class="card">
-    <div class="info-box">
-      <ul>
-        <li><strong>Confidence baseline (MSP)</strong>: single-pass softmax confidence (`1 - MSP` as uncertainty). Used as a crude baseline only.</li>
-        <li><strong>MC Dropout</strong>: multiple stochastic forward passes with dropout active at inference; mean prediction + uncertainty from disagreement/entropy.</li>
-        <li><strong>Deep Ensemble</strong>: aggregate predictions from multiple separately trained checkpoints; used for stronger uncertainty/OOD behavior.</li>
-      </ul>
-    </div>
+    <p>Four methods are evaluated for their ability to produce calibrated, useful uncertainty estimates on a ViT-based histopathology classifier.</p>
+    <ul style="margin:0.5rem 0 0;padding-left:1.2rem;line-height:1.9;">
+      <li><strong>Confidence (1-MSP)</strong> — single forward pass; uncertainty = 1 − max softmax probability. Zero inference overhead; used as the reference baseline.</li>
+      <li><strong>MC Dropout</strong> — T = 30 stochastic forward passes with dropout active at inference time. Uncertainty from predictive entropy and mutual information.</li>
+      <li><strong>Deep Ensemble</strong> — three independently fine-tuned checkpoints; predictions averaged. Uncertainty from inter-model disagreement.</li>
+      <li><strong>Temperature Scaling</strong> — post-hoc calibration: a single scalar T fitted on validation data softens all confidence scores. Rank-equivalent to Confidence but better calibrated.</li>
+    </ul>
   </div>
 </section>
 

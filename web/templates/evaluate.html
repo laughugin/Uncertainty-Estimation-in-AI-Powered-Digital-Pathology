@@ -2,118 +2,118 @@
 {% block title %}Evaluation — Uncertainty in Digital Pathology{% endblock %}
 {% block content %}
 <h1>Evaluation</h1>
+
+<!-- ── PRIMARY: Load saved results ── -->
 <section class="section">
-  <div class="section-num">1. Full Bundle Evaluation</div>
-  <div class="card">
-    <div class="form-row" style="flex-wrap:wrap;gap:1rem;margin-bottom:0.75rem;">
-      <div class="form-group">
-        <label for="run-select">Training run</label>
-        <select id="run-select" style="min-width:18rem;">
-          <option value="">Latest / default checkpoint</option>
+  <div class="card" style="border-left:4px solid var(--accent);">
+    <div class="form-row" style="flex-wrap:wrap;gap:0.75rem;align-items:flex-end;">
+      <div class="form-group" style="flex:1;min-width:20rem;">
+        <label for="saved-bundle-select">Load saved results</label>
+        <select id="saved-bundle-select" style="width:100%;">
+          <option value="">— select a saved result —</option>
         </select>
       </div>
-      <div class="form-group">
-        <label for="bundle-split">Split</label>
-        <select id="bundle-split">
-          <option value="test" selected>Test</option>
-          <option value="val">Validation</option>
-          <option value="train">Train</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label for="bundle-max-samples">Max samples</label>
-        <input type="number" id="bundle-max-samples" value="256" min="1" max="50000" step="1" style="width:7rem;">
-      </div>
-      <div class="form-group">
-        <label for="bundle-batch-size">Batch size</label>
-        <input type="number" id="bundle-batch-size" value="64" min="1" max="1024" step="1" style="width:6rem;">
-      </div>
-      <div class="form-group">
-        <label for="bundle-mc-samples">MC samples</label>
-        <input type="number" id="bundle-mc-samples" value="30" min="2" max="100" step="1" style="width:6rem;">
-      </div>
-      <div class="form-group">
-        <label for="bundle-fit-temp">Temperature scaling</label>
-        <select id="bundle-fit-temp">
-          <option value="0" selected>No</option>
-          <option value="1">Yes</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label for="bundle-fit-deferral">Val-fitted deferral</label>
-        <select id="bundle-fit-deferral">
-          <option value="1" selected>Yes</option>
-          <option value="0">No</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label for="bundle-shift-sev">Shift severities</label>
-        <input type="text" id="bundle-shift-sev" value="1,3,5" style="width:8rem;">
-      </div>
-      <div class="form-group">
-        <label for="bundle-ensemble-size">Ensemble size</label>
-        <input type="number" id="bundle-ensemble-size" value="2" min="1" max="10" step="1" style="width:6rem;">
-      </div>
-      <div class="form-group">
-        <label for="bundle-include-ens">Include deep ensemble</label>
-        <select id="bundle-include-ens">
-          <option value="1" selected>Yes</option>
-          <option value="0">No</option>
-        </select>
-      </div>
+      <button class="btn btn-primary" id="btn-load-saved" style="align-self:flex-end;">Load results</button>
     </div>
-
-    <div style="margin-top:0.75rem;padding:0.85rem;border:1px solid var(--border);border-radius:8px;background:var(--bg-subtle);">
-      <div class="metric-label">Shared deep ensemble members for Run all</div>
-      <div class="form-row" style="flex-wrap:wrap;gap:0.75rem;align-items:flex-end;">
-        <div class="form-group" style="min-width:30rem;">
-          <label>Choose compatible runs for the full bundle</label>
-          <div id="bundle-ensemble-picker" style="min-width:30rem;max-width:100%;"></div>
-        </div>
-      </div>
-      <div id="bundle-ensemble-note" style="display:none;margin-top:0.5rem;color:var(--text-secondary);font-size:0.88rem;">
-        These shared members are only used by `Run all`. Each section comparison below now remembers its own checked deep-ensemble members separately.
-      </div>
-    </div>
-
-    <button class="btn btn-primary" id="btn-run-all">Run all evaluations</button>
-    <span class="status-badge" id="run-badge" style="margin-left:0.5rem;">Idle</span>
-
-    <div style="margin-top:1rem;">
-      <div class="metric-label">Live progress</div>
-      <div style="width:100%;height:14px;background:var(--bg-subtle);border:1px solid var(--border);border-radius:999px;overflow:hidden;">
-        <div id="progress-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#1f77b4,#2ca02c);transition:width 0.25s ease;"></div>
-      </div>
-      <div id="progress-text" style="margin-top:0.5rem;color:var(--text-secondary);font-size:0.9rem;">No evaluation running.</div>
-      <pre id="live-log" style="margin-top:0.75rem;white-space:pre-wrap;background:var(--bg-subtle);padding:0.75rem;border:1px solid var(--border);border-radius:6px;max-height:280px;overflow:auto;">Waiting to start.</pre>
-    </div>
-
-    <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border);">
-      <div class="metric-label">Preload saved bundle</div>
-      <div class="form-row" style="flex-wrap:wrap;gap:0.75rem;align-items:flex-end;">
-        <div class="form-group">
-          <label for="saved-bundle-select">Saved result</label>
-          <select id="saved-bundle-select" style="min-width:28rem;">
-            <option value="">No saved bundle selected</option>
-          </select>
-        </div>
-        <button class="btn" id="btn-load-saved">Load saved results</button>
-      </div>
-      <div id="saved-bundle-note" style="display:none;margin-top:0.5rem;color:var(--text-secondary);font-size:0.85rem;">
-        Saved bundle results are filtered by the selected training run when possible.
-      </div>
-      <div id="saved-bundle-preview" style="margin-top:0.5rem;color:var(--text-secondary);font-size:0.88rem;white-space:pre-wrap;">
-        Preview appears here for the selected run and split.
-      </div>
-    </div>
+    <div id="saved-bundle-preview" style="margin-top:0.4rem;color:var(--text-secondary);font-size:0.85rem;white-space:pre-wrap;"></div>
   </div>
 </section>
 
-<section class="section" id="results-section" style="display:none;">
-  <div class="section-num">2. Bundle Results</div>
-  <div class="card">
-    <div id="bundle-summary" style="display:none;margin-bottom:1rem;color:var(--text-secondary);font-size:0.95rem;"></div>
+<!-- ── SECONDARY: Run new evaluation (collapsed by default) ── -->
+<section class="section">
+  <details id="run-all-details">
+    <summary style="cursor:pointer;font-weight:600;font-size:0.9rem;color:var(--muted);padding:0.5rem 0;user-select:none;">
+      Run new evaluation ›
+    </summary>
+    <div class="card" style="margin-top:0.5rem;">
+      <div class="form-row" style="flex-wrap:wrap;gap:1rem;margin-bottom:0.75rem;">
+        <div class="form-group">
+          <label for="run-select">Training run</label>
+          <select id="run-select" style="min-width:18rem;">
+            <option value="">Latest / default checkpoint</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="bundle-split">Split</label>
+          <select id="bundle-split">
+            <option value="test" selected>Test</option>
+            <option value="val">Validation</option>
+            <option value="train">Train</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="bundle-max-samples">Max samples</label>
+          <input type="number" id="bundle-max-samples" value="256" min="1" max="50000" step="1" style="width:7rem;">
+        </div>
+        <div class="form-group">
+          <label for="bundle-batch-size">Batch size</label>
+          <input type="number" id="bundle-batch-size" value="64" min="1" max="1024" step="1" style="width:6rem;">
+        </div>
+        <div class="form-group">
+          <label for="bundle-mc-samples">MC samples</label>
+          <input type="number" id="bundle-mc-samples" value="30" min="2" max="100" step="1" style="width:6rem;">
+        </div>
+        <div class="form-group">
+          <label for="bundle-fit-temp">Temperature scaling</label>
+          <select id="bundle-fit-temp">
+            <option value="0" selected>No</option>
+            <option value="1">Yes</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="bundle-fit-deferral">Val-fitted deferral</label>
+          <select id="bundle-fit-deferral">
+            <option value="1" selected>Yes</option>
+            <option value="0">No</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="bundle-shift-sev">Shift severities</label>
+          <input type="text" id="bundle-shift-sev" value="1,3,5" style="width:8rem;">
+        </div>
+        <div class="form-group">
+          <label for="bundle-ensemble-size">Ensemble size</label>
+          <input type="number" id="bundle-ensemble-size" value="2" min="1" max="10" step="1" style="width:6rem;">
+        </div>
+        <div class="form-group">
+          <label for="bundle-include-ens">Include deep ensemble</label>
+          <select id="bundle-include-ens">
+            <option value="1" selected>Yes</option>
+            <option value="0">No</option>
+          </select>
+        </div>
+      </div>
 
+      <div style="margin-top:0.75rem;padding:0.85rem;border:1px solid var(--border);border-radius:8px;background:var(--bg-subtle);">
+        <div class="metric-label">Deep ensemble members</div>
+        <div class="form-row" style="flex-wrap:wrap;gap:0.75rem;align-items:flex-end;">
+          <div class="form-group" style="min-width:30rem;">
+            <label>Choose compatible runs for the full bundle</label>
+            <div id="bundle-ensemble-picker" style="min-width:30rem;max-width:100%;"></div>
+          </div>
+        </div>
+        <div id="bundle-ensemble-note" style="display:none;margin-top:0.5rem;color:var(--text-secondary);font-size:0.88rem;"></div>
+      </div>
+
+      <div style="margin-top:0.75rem;display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">
+        <button class="btn btn-primary" id="btn-run-all">Run all evaluations</button>
+        <span class="status-badge" id="run-badge">Idle</span>
+      </div>
+
+      <div id="run-progress-wrap" style="margin-top:1rem;display:none;">
+        <div style="width:100%;height:10px;background:var(--bg-subtle);border:1px solid var(--border);border-radius:999px;overflow:hidden;">
+          <div id="progress-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#1f77b4,#2ca02c);transition:width 0.25s ease;"></div>
+        </div>
+        <div id="progress-text" style="margin-top:0.4rem;color:var(--text-secondary);font-size:0.85rem;"></div>
+        <pre id="live-log" style="margin-top:0.5rem;white-space:pre-wrap;background:var(--bg-subtle);padding:0.75rem;border:1px solid var(--border);border-radius:6px;max-height:260px;overflow:auto;font-size:0.82rem;"></pre>
+      </div>
+    </div>
+  </details>
+</section>
+
+<section class="section" id="results-section" style="display:none;">
+  <div class="section-num">Results</div>
+  <div class="card">
     <div class="table-wrap" style="margin-bottom:1rem;">
       <table class="data-table" id="core-metrics-table">
         <thead>
@@ -135,26 +135,23 @@
       </table>
     </div>
 
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1rem;">
-      <div>
-        <div class="metric-label">Program-generated benchmark summary</div>
-        <img id="benchmark-summary-img" alt="Benchmark summary" style="width:100%;border:1px solid var(--border);border-radius:6px;display:block;background:var(--bg-subtle);min-height:220px;">
+    <div id="summary-figures-grid" style="display:none;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1rem;margin-top:0.75rem;">
+      <div class="fig-slot">
+        <div class="metric-label">Benchmark summary</div>
+        <img id="benchmark-summary-img" alt="Benchmark summary" style="width:100%;border:1px solid var(--border);border-radius:6px;display:none;">
       </div>
-      <div>
+      <div class="fig-slot">
         <div class="metric-label">Reliability comparison</div>
-        <img id="reliability-img" alt="Reliability comparison" style="width:100%;border:1px solid var(--border);border-radius:6px;display:block;background:var(--bg-subtle);min-height:220px;">
+        <img id="reliability-img" alt="Reliability comparison" style="width:100%;border:1px solid var(--border);border-radius:6px;display:none;">
       </div>
-      <div>
+      <div class="fig-slot">
         <div class="metric-label">Risk-coverage comparison</div>
-        <img id="risk-coverage-img" alt="Risk coverage comparison" style="width:100%;border:1px solid var(--border);border-radius:6px;display:block;background:var(--bg-subtle);min-height:220px;">
+        <img id="risk-coverage-img" alt="Risk coverage comparison" style="width:100%;border:1px solid var(--border);border-radius:6px;display:none;">
       </div>
-      <div>
-        <div class="metric-label">Shift / OOD comparison</div>
-        <img id="shift-summary-img" alt="Shift OOD comparison" style="width:100%;border:1px solid var(--border);border-radius:6px;display:block;background:var(--bg-subtle);min-height:220px;">
+      <div class="fig-slot">
+        <div class="metric-label">Shift / OOD overview</div>
+        <img id="shift-summary-img" alt="Shift OOD comparison" style="width:100%;border:1px solid var(--border);border-radius:6px;display:none;">
       </div>
-    </div>
-    <div id="figure-source-note" style="display:none;margin-top:0.75rem;color:var(--text-secondary);font-size:0.88rem;">
-      The report uses server-generated figures saved with the run, so the same assets can be reused later without redrawing them in the browser.
     </div>
 
     <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border);">
@@ -176,12 +173,6 @@
             <option value="brier">Brier</option>
           </select>
         </div>
-      </div>
-      <div id="detail-summary" style="display:none;margin-top:0.5rem;color:var(--text-secondary);font-size:0.9rem;">
-        Detailed per-method report appears after a bundle is loaded.
-      </div>
-      <div id="detail-references" style="display:none;margin-top:0.35rem;color:var(--text-secondary);font-size:0.85rem;">
-        Method-specific references will appear here after a bundle is loaded.
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1rem;margin-top:0.75rem;">
         <div>
@@ -291,72 +282,18 @@
       </table>
     </div>
 
-    <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border);">
-      <div class="form-row" style="flex-wrap:wrap;gap:0.75rem;align-items:flex-end;">
-        <div class="form-group">
-          <label for="batch-method-select">Batch correctness method</label>
-          <select id="batch-method-select" style="min-width:14rem;">
-            <option value="">No method available</option>
-          </select>
-        </div>
-      </div>
-      <div id="batch-summary" style="display:none;margin-top:0.5rem;color:var(--text-secondary);font-size:0.9rem;">
-        Batch correctness will appear after a bundle is loaded.
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1rem;margin-top:0.75rem;">
-        <div>
-          <div class="metric-label">Batch correctness overview</div>
-          <canvas id="batch-correctness-chart" width="420" height="280" style="width:100%;border:1px solid var(--border);border-radius:6px;"></canvas>
-        </div>
-        <div>
-          <div class="metric-label">Per-sample confidence</div>
-          <canvas id="batch-confidence-chart" width="420" height="280" style="width:100%;border:1px solid var(--border);border-radius:6px;"></canvas>
-        </div>
-      </div>
-      <div class="table-wrap" style="margin-top:0.75rem;">
-        <table class="data-table" id="batch-table">
-          <thead>
-            <tr>
-              <th>Idx</th>
-              <th>GT</th>
-              <th>Pred</th>
-              <th>Confidence</th>
-              <th>Correct</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr><td colspan="5">No batch results loaded.</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <pre id="bundle-json-note" style="display:none;margin-top:1rem;white-space:pre-wrap;background:var(--bg-subtle);padding:0.75rem;border:1px solid var(--border);border-radius:6px;">No bundle output yet.</pre>
   </div>
 </section>
 
-<section class="section">
-  <div class="section-num">3. Section Comparisons</div>
+<section class="section" id="section-comparisons-section" style="display:none;">
+  <div class="section-num">3. Detailed Results</div>
   <div class="card">
     <div style="display:flex;flex-direction:column;gap:1rem;">
       <div style="border:1px solid var(--border);border-radius:8px;padding:1rem;background:var(--bg-subtle);">
-        <div class="metric-label">Predictive performance</div>
-        <div id="section-ensemble-picker-performance" style="margin-top:0.75rem;"></div>
-        <button class="btn btn-primary" id="btn-run-section-performance" style="margin-top:0.75rem;">Run section comparison</button>
-        <div style="margin-top:0.75rem;padding-top:0.75rem;border-top:1px dashed var(--border);">
-          <div class="form-row" style="flex-wrap:wrap;gap:0.75rem;align-items:flex-end;">
-            <div class="form-group">
-              <label for="saved-section-performance-select">Saved predictive-performance result</label>
-              <select id="saved-section-performance-select" style="min-width:28rem;">
-                <option value="">No saved result selected</option>
-              </select>
-            </div>
-            <button class="btn" id="btn-load-section-performance">Load saved section</button>
-          </div>
-          <div id="saved-section-performance-note" style="display:none;margin-top:0.35rem;color:var(--text-secondary);font-size:0.85rem;">Saved predictive-performance results for the selected run and split appear here.</div>
-        </div>
-        <div id="performance-results-card" style="display:none;margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border);">
-          <div class="metric-label" style="font-size:1rem;">Predictive Performance Result</div>
+        <h4 style="margin:0 0 0.75rem;font-size:1rem;font-weight:600;">Predictive performance</h4>
+        <div id="section-ensemble-picker-performance" style="display:none;"></div>
+        <select id="saved-section-performance-select" style="display:none;"></select>
+        <div id="performance-results-card" style="display:none;">
           <div id="performance-result-summary" style="display:none;margin-top:0.35rem;color:var(--text-secondary);font-size:0.92rem;"></div>
           <div id="performance-result-interpretation" style="display:none;margin-top:0.35rem;color:var(--text);font-size:0.92rem;"></div>
           <div style="display:none;margin-top:0.5rem;color:var(--text-secondary);font-size:0.88rem;" id="performance-result-visual-note">
@@ -365,11 +302,11 @@
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1rem;margin-top:0.75rem;">
             <div>
               <div class="metric-label">Thresholded classification metrics</div>
-              <img id="performance-thresholded-img" alt="Thresholded predictive metrics" style="width:100%;border:1px solid var(--border);border-radius:6px;display:block;background:var(--bg-subtle);min-height:220px;">
+              <img id="performance-thresholded-img" alt="Thresholded predictive metrics" style="width:100%;border:1px solid var(--border);border-radius:6px;display:none;">
             </div>
             <div>
               <div class="metric-label">Ranking metrics</div>
-              <img id="performance-ranking-img" alt="Ranking predictive metrics" style="width:100%;border:1px solid var(--border);border-radius:6px;display:block;background:var(--bg-subtle);min-height:220px;">
+              <img id="performance-ranking-img" alt="Ranking predictive metrics" style="width:100%;border:1px solid var(--border);border-radius:6px;display:none;">
             </div>
           </div>
           <div class="table-wrap" style="margin-top:0.75rem;">
@@ -384,23 +321,10 @@
       </div>
 
       <div style="border:1px solid var(--border);border-radius:8px;padding:1rem;background:var(--bg-subtle);">
-        <div class="metric-label">Calibration</div>
-        <div id="section-ensemble-picker-calibration" style="margin-top:0.75rem;"></div>
-        <button class="btn btn-primary" id="btn-run-section-calibration" style="margin-top:0.75rem;">Run section comparison</button>
-        <div style="margin-top:0.75rem;padding-top:0.75rem;border-top:1px dashed var(--border);">
-          <div class="form-row" style="flex-wrap:wrap;gap:0.75rem;align-items:flex-end;">
-            <div class="form-group">
-              <label for="saved-section-calibration-select">Saved calibration result</label>
-              <select id="saved-section-calibration-select" style="min-width:28rem;">
-                <option value="">No saved result selected</option>
-              </select>
-            </div>
-            <button class="btn" id="btn-load-section-calibration">Load saved section</button>
-          </div>
-          <div id="saved-section-calibration-note" style="display:none;margin-top:0.35rem;color:var(--text-secondary);font-size:0.85rem;">Saved calibration results for the selected run and split appear here.</div>
-        </div>
-        <div id="calibration-results-card" style="display:none;margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border);">
-          <div class="metric-label" style="font-size:1rem;">Calibration Result</div>
+        <h4 style="margin:0 0 0.75rem;font-size:1rem;font-weight:600;">Calibration</h4>
+        <div id="section-ensemble-picker-calibration" style="display:none;"></div>
+        <select id="saved-section-calibration-select" style="display:none;"></select>
+        <div id="calibration-results-card" style="display:none;">
           <div id="calibration-result-summary" style="display:none;margin-top:0.35rem;color:var(--text-secondary);font-size:0.92rem;"></div>
           <div id="calibration-result-interpretation" style="display:none;margin-top:0.35rem;color:var(--text);font-size:0.92rem;"></div>
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1rem;margin-top:0.75rem;">
@@ -411,8 +335,8 @@
               </table>
             </div>
             <div style="display:grid;gap:0.75rem;">
-              <img id="calibration-metrics-img" alt="Calibration metric summary" style="width:100%;border:1px solid var(--border);border-radius:6px;min-height:220px;object-fit:contain;background:var(--bg);" />
-              <img id="calibration-reliability-img" alt="Calibration reliability comparison" style="width:100%;border:1px solid var(--border);border-radius:6px;min-height:220px;object-fit:contain;background:var(--bg);" />
+              <img id="calibration-metrics-img" alt="Calibration metric summary" style="width:100%;border:1px solid var(--border);border-radius:6px;display:none;" />
+              <img id="calibration-reliability-img" alt="Calibration reliability comparison" style="width:100%;border:1px solid var(--border);border-radius:6px;display:none;" />
             </div>
           </div>
           <div id="calibration-result-source" style="display:none;margin-top:0.5rem;color:var(--text-secondary);font-size:0.85rem;"></div>
@@ -421,28 +345,15 @@
       </div>
 
       <div style="border:1px solid var(--border);border-radius:8px;padding:1rem;background:var(--bg-subtle);">
-        <div class="metric-label">Uncertainty quality</div>
-        <div id="section-ensemble-picker-uncertainty" style="margin-top:0.75rem;"></div>
-        <button class="btn btn-primary" id="btn-run-section-uncertainty" style="margin-top:0.75rem;">Run section comparison</button>
-        <div style="margin-top:0.75rem;padding-top:0.75rem;border-top:1px dashed var(--border);">
-          <div class="form-row" style="flex-wrap:wrap;gap:0.75rem;align-items:flex-end;">
-            <div class="form-group">
-              <label for="saved-section-uncertainty-select">Saved uncertainty-quality result</label>
-              <select id="saved-section-uncertainty-select" style="min-width:28rem;">
-                <option value="">No saved result selected</option>
-              </select>
-            </div>
-            <button class="btn" id="btn-load-section-uncertainty">Load saved section</button>
-          </div>
-          <div id="saved-section-uncertainty-note" style="display:none;margin-top:0.35rem;color:var(--text-secondary);font-size:0.85rem;">Saved uncertainty-quality results for the selected run and split appear here.</div>
-        </div>
-        <div id="uncertainty-results-card" style="display:none;margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border);">
-          <div class="metric-label" style="font-size:1rem;">Uncertainty Quality Result</div>
+        <h4 style="margin:0 0 0.75rem;font-size:1rem;font-weight:600;">Uncertainty quality</h4>
+        <div id="section-ensemble-picker-uncertainty" style="display:none;"></div>
+        <select id="saved-section-uncertainty-select" style="display:none;"></select>
+        <div id="uncertainty-results-card" style="display:none;">
           <div id="uncertainty-result-summary" style="display:none;margin-top:0.35rem;color:var(--text-secondary);font-size:0.92rem;"></div>
           <div id="uncertainty-result-interpretation" style="display:none;margin-top:0.35rem;color:var(--text);font-size:0.92rem;"></div>
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1rem;margin-top:0.75rem;">
-            <img id="uncertainty-primary-img" alt="Primary uncertainty score comparison" style="width:100%;border:1px solid var(--border);border-radius:6px;min-height:220px;object-fit:contain;background:var(--bg);" />
-            <img id="uncertainty-common-img" alt="Shared uncertainty score comparison" style="width:100%;border:1px solid var(--border);border-radius:6px;min-height:220px;object-fit:contain;background:var(--bg);" />
+            <img id="uncertainty-primary-img" alt="Primary uncertainty score comparison" style="width:100%;border:1px solid var(--border);border-radius:6px;display:none;" />
+            <img id="uncertainty-common-img" alt="Shared uncertainty score comparison" style="width:100%;border:1px solid var(--border);border-radius:6px;display:none;" />
           </div>
           <div class="table-wrap" style="margin-top:0.75rem;">
             <table class="data-table" id="core-uq-table">
@@ -456,23 +367,10 @@
       </div>
 
       <div style="border:1px solid var(--border);border-radius:8px;padding:1rem;background:var(--bg-subtle);">
-        <div class="metric-label">Selective prediction</div>
-        <div id="section-ensemble-picker-selective" style="margin-top:0.75rem;"></div>
-        <button class="btn btn-primary" id="btn-run-section-selective" style="margin-top:0.75rem;">Run section comparison</button>
-        <div style="margin-top:0.75rem;padding-top:0.75rem;border-top:1px dashed var(--border);">
-          <div class="form-row" style="flex-wrap:wrap;gap:0.75rem;align-items:flex-end;">
-            <div class="form-group">
-              <label for="saved-section-selective-select">Saved selective-prediction result</label>
-              <select id="saved-section-selective-select" style="min-width:28rem;">
-                <option value="">No saved result selected</option>
-              </select>
-            </div>
-            <button class="btn" id="btn-load-section-selective">Load saved section</button>
-          </div>
-          <div id="saved-section-selective-note" style="display:none;margin-top:0.35rem;color:var(--text-secondary);font-size:0.85rem;">Saved selective-prediction results for the selected run and split appear here.</div>
-        </div>
-        <div id="selective-results-card" style="display:none;margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border);">
-          <div class="metric-label" style="font-size:1rem;">Selective Prediction Result</div>
+        <h4 style="margin:0 0 0.75rem;font-size:1rem;font-weight:600;">Selective prediction</h4>
+        <div id="section-ensemble-picker-selective" style="display:none;"></div>
+        <select id="saved-section-selective-select" style="display:none;"></select>
+        <div id="selective-results-card" style="display:none;">
           <div id="selective-result-summary" style="display:none;margin-top:0.35rem;color:var(--text-secondary);font-size:0.92rem;"></div>
           <div id="selective-result-interpretation" style="display:none;margin-top:0.35rem;color:var(--text);font-size:0.92rem;"></div>
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1rem;margin-top:0.75rem;">
@@ -483,8 +381,8 @@
               </table>
             </div>
             <div style="display:grid;gap:0.75rem;">
-              <img id="selective-risk-coverage-img" alt="Selective prediction risk coverage" style="width:100%;border:1px solid var(--border);border-radius:6px;min-height:220px;object-fit:contain;background:var(--bg);" />
-              <img id="selective-high-confidence-img" alt="Selective prediction high confidence cohort" style="width:100%;border:1px solid var(--border);border-radius:6px;min-height:220px;object-fit:contain;background:var(--bg);" />
+              <img id="selective-risk-coverage-img" alt="Selective prediction risk coverage" style="width:100%;border:1px solid var(--border);border-radius:6px;display:none;" />
+              <img id="selective-high-confidence-img" alt="Selective prediction high confidence cohort" style="width:100%;border:1px solid var(--border);border-radius:6px;display:none;" />
             </div>
           </div>
           <div id="selective-result-source" style="display:none;margin-top:0.5rem;color:var(--text-secondary);font-size:0.85rem;"></div>
@@ -493,27 +391,14 @@
       </div>
 
       <div style="border:1px solid var(--border);border-radius:8px;padding:1rem;background:var(--bg-subtle);">
-        <div class="metric-label">Pathology proxy reporting</div>
-        <div id="section-ensemble-picker-pathology" style="margin-top:0.75rem;"></div>
-        <button class="btn btn-primary" id="btn-run-section-pathology" style="margin-top:0.75rem;">Run section comparison</button>
-        <div style="margin-top:0.75rem;padding-top:0.75rem;border-top:1px dashed var(--border);">
-          <div class="form-row" style="flex-wrap:wrap;gap:0.75rem;align-items:flex-end;">
-            <div class="form-group">
-              <label for="saved-section-pathology-select">Saved pathology-proxy result</label>
-              <select id="saved-section-pathology-select" style="min-width:28rem;">
-                <option value="">No saved result selected</option>
-              </select>
-            </div>
-            <button class="btn" id="btn-load-section-pathology">Load saved section</button>
-          </div>
-          <div id="saved-section-pathology-note" style="display:none;margin-top:0.35rem;color:var(--text-secondary);font-size:0.85rem;">Saved pathology-proxy results for the selected run and split appear here.</div>
-        </div>
-        <div id="pathology-results-card" style="display:none;margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border);">
-          <div class="metric-label" style="font-size:1rem;">Pathology Proxy Reporting Result</div>
+        <h4 style="margin:0 0 0.75rem;font-size:1rem;font-weight:600;">Pathology proxy reporting</h4>
+        <div id="section-ensemble-picker-pathology" style="display:none;"></div>
+        <select id="saved-section-pathology-select" style="display:none;"></select>
+        <div id="pathology-results-card" style="display:none;">
           <div id="pathology-result-summary" style="display:none;margin-top:0.35rem;color:var(--text-secondary);font-size:0.92rem;"></div>
           <div id="pathology-result-interpretation" style="display:none;margin-top:0.35rem;color:var(--text);font-size:0.92rem;"></div>
           <div style="margin-top:0.75rem;">
-            <img id="pathology-proxy-img" alt="Pathology proxy reporting comparison" style="width:100%;border:1px solid var(--border);border-radius:6px;min-height:240px;object-fit:contain;background:var(--bg);" />
+            <img id="pathology-proxy-img" alt="Pathology proxy reporting comparison" style="width:100%;border:1px solid var(--border);border-radius:6px;display:none;" />
           </div>
           <div class="table-wrap" style="margin-top:0.75rem;">
             <table class="data-table" id="core-pathology-table">
@@ -527,23 +412,10 @@
       </div>
 
       <div style="border:1px solid var(--border);border-radius:8px;padding:1rem;background:var(--bg-subtle);">
-        <div class="metric-label">Shift / OOD robustness</div>
-        <div id="section-ensemble-picker-shift" style="margin-top:0.75rem;"></div>
-        <button class="btn btn-primary" id="btn-run-section-shift" style="margin-top:0.75rem;">Run section comparison</button>
-        <div style="margin-top:0.75rem;padding-top:0.75rem;border-top:1px dashed var(--border);">
-          <div class="form-row" style="flex-wrap:wrap;gap:0.75rem;align-items:flex-end;">
-            <div class="form-group">
-              <label for="saved-section-shift-select">Saved shift / OOD result</label>
-              <select id="saved-section-shift-select" style="min-width:28rem;">
-                <option value="">No saved result selected</option>
-              </select>
-            </div>
-            <button class="btn" id="btn-load-section-shift">Load saved section</button>
-          </div>
-          <div id="saved-section-shift-note" style="display:none;margin-top:0.35rem;color:var(--text-secondary);font-size:0.85rem;">Saved shift / OOD results for the selected run and split appear here.</div>
-        </div>
-        <div id="shift-results-card" style="display:none;margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border);">
-          <div class="metric-label" style="font-size:1rem;">Method Shift / OOD Result</div>
+        <h4 style="margin:0 0 0.75rem;font-size:1rem;font-weight:600;">Shift / OOD robustness</h4>
+        <div id="section-ensemble-picker-shift" style="display:none;"></div>
+        <select id="saved-section-shift-select" style="display:none;"></select>
+        <div id="shift-results-card" style="display:none;">
           <div id="shift-result-summary" style="display:none;margin-top:0.35rem;color:var(--text-secondary);font-size:0.92rem;"></div>
           <div id="shift-result-interpretation" style="display:none;margin-top:0.35rem;color:var(--text);font-size:0.92rem;"></div>
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1rem;margin-top:0.75rem;">
@@ -583,9 +455,9 @@
               </div>
             </div>
             <div style="grid-column:1 / -1;display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1rem;">
-              <img id="shift-detection-img" alt="Shift and OOD detection summary" style="width:100%;border:1px solid var(--border);border-radius:6px;min-height:220px;object-fit:contain;background:var(--bg);" />
-              <img id="shift-robustness-img" alt="Shift robustness summary" style="width:100%;border:1px solid var(--border);border-radius:6px;min-height:220px;object-fit:contain;background:var(--bg);" />
-              <img id="shift-section-detail-img" alt="Shift per condition detail" style="grid-column:1 / -1;width:100%;border:1px solid var(--border);border-radius:6px;min-height:260px;object-fit:contain;background:var(--bg);" />
+              <img id="shift-detection-img" alt="Shift and OOD detection summary" style="width:100%;border:1px solid var(--border);border-radius:6px;display:none;" />
+              <img id="shift-robustness-img" alt="Shift robustness summary" style="width:100%;border:1px solid var(--border);border-radius:6px;display:none;" />
+              <img id="shift-section-detail-img" alt="Shift per condition detail" style="grid-column:1 / -1;width:100%;border:1px solid var(--border);border-radius:6px;display:none;" />
             </div>
           </div>
           <div id="shift-result-source" style="display:none;margin-top:0.5rem;color:var(--text-secondary);font-size:0.85rem;"></div>
@@ -593,93 +465,11 @@
         </div>
       </div>
     </div>
-    <pre id="section-run-log" style="margin-top:1rem;white-space:pre-wrap;background:var(--bg-subtle);padding:0.75rem;border:1px solid var(--border);border-radius:6px;max-height:260px;overflow:auto;">Waiting to start.</pre>
   </div>
 </section>
 
 <section class="section">
-  <div class="section-num">4. Literature Alignment</div>
-  <div class="card">
-    <div class="info-box">
-      <p><strong>References explicitly relevant to this evaluation report.</strong></p>
-      <div class="table-wrap" style="margin:0.75rem 0;">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Report block</th>
-              <th>Main references</th>
-              <th>How they are used here</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>MSP baseline</td>
-              <td>[8], [11]</td>
-              <td>Used only as a crude pathology-relevant baseline for confidence/OOD comparison, not as a strong uncertainty method.</td>
-            </tr>
-            <tr>
-              <td>MC Dropout</td>
-              <td>Gal and Ghahramani (2016)</td>
-              <td>The implemented stochastic forward-pass method in this repository is based on dropout as a Bayesian approximation.</td>
-            </tr>
-            <tr>
-              <td>Deep Ensembles</td>
-              <td>Lakshminarayanan et al. (2017), [8], [11]</td>
-              <td>Deep ensembles are the core ensemble method source, while [8] and [11] justify pathology-specific shift and OOD evaluation.</td>
-            </tr>
-            <tr>
-              <td>Temperature scaling / calibration</td>
-              <td>Guo et al. (2017)</td>
-              <td>The post-hoc calibration method used in the report is temperature scaling in the standard classification setting.</td>
-            </tr>
-            <tr>
-              <td>Error detection, calibration, OOD metrics</td>
-              <td>[8], [11]</td>
-              <td>These are the strongest pathology-specific references supporting evaluation under realistic distribution shift and uncertainty-based discrimination.</td>
-            </tr>
-            <tr>
-              <td>Distribution shift / OOD in pathology</td>
-              <td>[8], [11]</td>
-              <td>Supports near-OOD/far-OOD analysis and pathology-specific shift robustness discussion.</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <ul>
-        <li><strong>MC Dropout</strong>: grounded in Gal and Ghahramani (2016).</li>
-        <li><strong>Deep Ensembles</strong>: grounded in Lakshminarayanan et al. (2017), with [8] and [11] providing pathology-specific shift context.</li>
-        <li><strong>Temperature Scaling</strong>: grounded in Guo et al. (2017).</li>
-        <li><strong>Shift / OOD in pathology</strong>: grounded primarily in [8] and [11].</li>
-      </ul>
-      <div class="table-wrap" style="margin-top:0.75rem;">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Reference</th>
-              <th>Why it is kept on this page</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>[8] Linmans et al. (2023)</td>
-              <td>Directly supports digital pathology OOD evaluation, patch-to-slide aggregation, and the near-OOD versus far-OOD framing used in this report.</td>
-            </tr>
-            <tr>
-              <td>[11] Thagaard et al. (2020)</td>
-              <td>Directly supports uncertainty behavior under real pathology dataset shifts and the claim that deep ensembles are comparatively robust under shift.</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <p style="margin-top:0.75rem;color:var(--text-secondary);font-size:0.9rem;">
-        The full ordered literature list remains on the <a href="{{ url_for('project') }}">Project</a> page. This evaluation page keeps only the references that most directly justify the implemented methods and reported pathology evaluation setting.
-      </p>
-    </div>
-  </div>
-</section>
-
-<section class="section">
-  <div class="section-num">5. Advanced Uncertainty Analysis</div>
+  <div class="section-num">4. Advanced Uncertainty Analysis</div>
   <div class="card">
     <div class="info-box">
       <p><strong>Three advanced analyses</strong> extending the standard evaluation: conformal prediction (coverage guarantees), aleatoric vs. epistemic uncertainty decomposition, and calibration degradation under distribution shift.</p>
@@ -981,9 +771,13 @@ function clearFigure(id, text) {
   const el = byId(id);
   if (!el) return;
   el.removeAttribute('src');
-  el.style.display = 'block';
-  el.style.minHeight = (el.id === 'shift-detail-img' || el.id === 'shift-section-detail-img') ? '260px' : '220px';
+  el.style.display = 'none';
+  el.style.minHeight = '';
   el.alt = text || 'No figure';
+  // also hide the parent label-div if it has the fig-slot class
+  if (el.parentElement && el.parentElement.classList.contains('fig-slot')) {
+    el.parentElement.style.display = 'none';
+  }
 }
 
 function setFigure(id, path, alt) {
@@ -995,6 +789,11 @@ function setFigure(id, path, alt) {
   }
   el.src = artifactUrl(path);
   el.alt = alt || 'Report figure';
+  el.style.display = 'block';
+  el.style.minHeight = '';
+  if (el.parentElement && el.parentElement.classList.contains('fig-slot')) {
+    el.parentElement.style.display = 'block';
+  }
 }
 
 function drawAxes(ctx, w, h, pad, xLabel, yLabel) {
@@ -1618,13 +1417,9 @@ function refreshSavedBundles() {
       sel.appendChild(opt);
     });
     if (currentSavedBundles.length) sel.value = currentSavedBundles[0].name;
-    byId('saved-bundle-note').textContent = currentSavedBundles.length
-      ? ('Found ' + currentSavedBundles.length + ' saved bundle result(s) for the current selection.')
-      : 'No saved bundle found yet for the current selection.';
     renderSavedBundlePreview(sel.value);
   }).catch(function() {
-    byId('saved-bundle-note').textContent = 'Could not load saved bundle list.';
-    setText('saved-bundle-preview', 'Saved bundle preview could not be loaded.');
+    setText('saved-bundle-preview', 'Could not load saved bundle list.');
   });
 }
 
@@ -1844,10 +1639,10 @@ function renderSummaryFigures(manifest) {
   setFigure('benchmark-summary-img', figs.benchmark_summary_metrics, 'Benchmark summary');
   setFigure('reliability-img', figs.benchmark_reliability_comparison, 'Reliability comparison');
   setFigure('risk-coverage-img', figs.benchmark_risk_coverage_comparison, 'Risk-coverage comparison');
-  setFigure('shift-summary-img', figs.shift_detail_ood_auroc, 'Shift OOD comparison');
-  byId('figure-source-note').textContent = manifest
-    ? 'The report uses saved server-generated figures from this run package.'
-    : 'Report package is not available for this bundle yet.';
+  setFigure('shift-summary-img', figs.shift_detail_ood_auroc, 'Shift OOD overview');
+  const grid = byId('summary-figures-grid');
+  const anyFig = figs.benchmark_summary_metrics || figs.benchmark_reliability_comparison || figs.benchmark_risk_coverage_comparison || figs.shift_detail_ood_auroc;
+  if (grid) grid.style.display = anyFig ? 'grid' : 'none';
 }
 
 function drawBatchConfidence(results) {
@@ -1944,8 +1739,6 @@ function renderDetailedMethodReport(method) {
   const entry = currentDetailedMetrics.find(function(x) { return x.method === method; }) || null;
   const methodReport = (((currentReportManifest || {}).method_reports || {})[method]) || {};
   if (!entry) {
-    byId('detail-summary').textContent = 'Detailed metrics are not available for this method yet.';
-    byId('detail-references').textContent = 'Method-specific references are not available.';
     byId('report-comments').textContent = 'No detailed comments available.';
     document.querySelector('#uncertainty-quality-table tbody').innerHTML = '<tr><td colspan="3">No detailed method selected.</td></tr>';
     document.querySelector('#target-risk-table tbody').innerHTML = '<tr><td colspan="4">No target-risk thresholds loaded.</td></tr>';
@@ -1991,11 +1784,6 @@ function renderDetailedMethodReport(method) {
         '</tr>';
       }).join('')
     : '<tr><td colspan="4">No target-risk thresholds available.</td></tr>';
-  byId('detail-summary').textContent =
-    'Detailed report for ' + method + ': ' + (explanation.what || 'Saved program-generated figures and metrics are shown for this method.');
-  byId('detail-references').textContent = explanation.references
-    ? ('Method references: ' + explanation.references)
-    : 'Method-specific references are not defined for this selection.';
   byId('report-comments').textContent =
     'Why it is used: ' + (explanation.why || 'This method helps compare predictive quality, calibration, and uncertainty usefulness.') +
     ' Interpretation: ' + (explanation.interpretation || 'Judge it by calibration, error detection, and selective prediction together rather than one score alone.');
@@ -2077,7 +1865,6 @@ function validateSectionEnsembleSelection(section, payload) {
   if (selected.length !== sizeRequested) {
     const msg = 'Before running the ' + section + ' section with deep ensemble, check exactly ' + sizeRequested + ' trained model(s) in this section\'s deep-ensemble list. Currently checked: ' + selected.length + '.';
     setText(sectionEnsembleNoteId(section), msg);
-    setText('section-run-log', 'Deep ensemble selection required: ' + msg);
     window.alert(msg);
     return false;
   }
@@ -2087,8 +1874,7 @@ function validateSectionEnsembleSelection(section, payload) {
 function runSectionComparison(section, url, payload, buttonId, onSuccess) {
   if (!validateSectionEnsembleSelection(section, payload)) return;
   const btn = byId(buttonId);
-  btn.disabled = true;
-  setText('section-run-log', 'Starting comparison run...');
+  if (btn) btn.disabled = true;
   fetch(url, {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
@@ -2097,13 +1883,12 @@ function runSectionComparison(section, url, payload, buttonId, onSuccess) {
     return r.json().then(function(d) { return {ok: r.ok, body: d}; });
   }).then(function(resp) {
     if (!resp.ok || !resp.body.ok) throw new Error(resp.body.error || 'Request failed');
-    setText('section-run-log', resp.body.log || 'Completed.');
     onSuccess(resp.body.result || {}, resp.body.output_path || '', resp.body.log || '');
     refreshSavedSection(section);
   }).catch(function(err) {
-    setText('section-run-log', 'Error: ' + err.message);
+    console.error('Section comparison error:', err.message);
   }).finally(function() {
-    btn.disabled = false;
+    if (btn) btn.disabled = false;
   });
 }
 
@@ -2321,15 +2106,15 @@ function renderShiftResult(result, outputPath, logText) {
     var LABEL_MAP = { id: 'Original', blur: 'Blur', noise: 'Noise', jpeg: 'JPEG', color: 'Color' };
     var stripHtml = '';
     // Group by shift type for visual clarity
-    var grouped = {};
+    var groupedByShift = {};
     uniqueKeys.forEach(function(key) {
       var parsed = parseConditionKey(key);
       if (!parsed) return;
-      if (!grouped[parsed.shift]) grouped[parsed.shift] = [];
-      grouped[parsed.shift].push({ key: key, severity: parsed.severity });
+      if (!groupedByShift[parsed.shift]) groupedByShift[parsed.shift] = [];
+      groupedByShift[parsed.shift].push({ key: key, severity: parsed.severity });
     });
-    Object.keys(grouped).sort().forEach(function(shift) {
-      var items = grouped[shift].sort(function(a, b) { return a.severity - b.severity; });
+    Object.keys(groupedByShift).sort().forEach(function(shift) {
+      var items = groupedByShift[shift].sort(function(a, b) { return a.severity - b.severity; });
       var shiftLabel = LABEL_MAP[shift] || shift;
       stripHtml += '<div style="display:inline-flex;flex-direction:column;align-items:center;gap:4px;">';
       stripHtml += '<div style="font-size:0.78rem;color:var(--accent,#5b8dee);font-weight:600;text-align:center;">' + shiftLabel + '</div>';
@@ -2385,16 +2170,10 @@ function populateSectionResultsFromBundle(bundle, outputPath) {
 function renderBundleResult(result, outputPath) {
   currentBundleResult = result;
   byId('results-section').style.display = 'block';
+  const secComp = byId('section-comparisons-section');
+  if (secComp) secComp.style.display = 'block';
   const methods = renderCoreTable(result);
   renderShiftTable(result);
-  populateBatchMethodSelect(methods);
-  byId('bundle-summary').textContent =
-    'Completed bundle: ' + outputPath +
-    ' | methods: ' + methods.join(', ') +
-    ' | best near-OOD method: ' + ((((result.shift_method_comparison || {}).best_near_ood_by_auroc || {}).method) || 'n/a');
-  byId('bundle-json-note').textContent =
-    'Saved summary: ' + outputPath + '\n' +
-    'The report below is loaded from the saved program-generated report package and its figure manifest.';
   loadReportManifest(result).then(function(manifest) {
     currentReportManifest = manifest;
     renderSummaryFigures(manifest);
@@ -2405,7 +2184,6 @@ function renderBundleResult(result, outputPath) {
     renderDetailedCurves([]);
   });
   populateSectionResultsFromBundle(result, outputPath);
-  if (methods.length) loadBatchCorrectness(byId('batch-method-select').value || methods[0]);
 }
 
 function startRunAll() {
@@ -2416,18 +2194,13 @@ function startRunAll() {
   byId('btn-run-all').disabled = true;
   byId('run-badge').textContent = 'Running';
   byId('live-log').textContent = 'Connecting to evaluation worker...';
+  const progressWrap = byId('run-progress-wrap');
+  if (progressWrap) progressWrap.style.display = 'block';
+  const details = byId('run-all-details');
+  if (details) details.open = true;
   byId('results-section').style.display = 'none';
-  clearFigure('benchmark-summary-img', 'Waiting for run...');
-  clearFigure('reliability-img', 'Waiting for run...');
-  clearFigure('risk-coverage-img', 'Waiting for run...');
-  clearFigure('shift-summary-img', 'Waiting for run...');
-  clearFigure('confusion-img', 'Waiting for run...');
-  clearFigure('temperature-img', 'Waiting for run...');
-  clearFigure('error-roc-img', 'Waiting for run...');
-  clearFigure('error-pr-img', 'Waiting for run...');
-  clearFigure('uncertainty-hist-img', 'Waiting for run...');
-  clearFigure('entropy-hist-img', 'Waiting for run...');
-  clearFigure('shift-detail-img', 'Waiting for run...');
+  const grid = byId('summary-figures-grid');
+  if (grid) grid.style.display = 'none';
   progressSet(0, 'Connecting...');
 
   ws = new WebSocket(wsUrl('/ws/evaluate/all'));
@@ -2476,22 +2249,28 @@ populateRuns();
 refreshSavedBundles();
 refreshAllSavedSections();
 byId('btn-run-all').addEventListener('click', startRunAll);
-byId('btn-run-section-performance').addEventListener('click', function() {
+const _btnRunPerf = byId('btn-run-section-performance');
+if (_btnRunPerf) _btnRunPerf.addEventListener('click', function() {
   runSectionComparison('performance', '/api/evaluate/compare/core', compareCorePayload('performance'), 'btn-run-section-performance', renderPerformanceResult);
 });
-byId('btn-run-section-calibration').addEventListener('click', function() {
+const _btnRunCal = byId('btn-run-section-calibration');
+if (_btnRunCal) _btnRunCal.addEventListener('click', function() {
   runSectionComparison('calibration', '/api/evaluate/compare/core', compareCorePayload('calibration'), 'btn-run-section-calibration', renderCalibrationResult);
 });
-byId('btn-run-section-uncertainty').addEventListener('click', function() {
+const _btnRunUnc = byId('btn-run-section-uncertainty');
+if (_btnRunUnc) _btnRunUnc.addEventListener('click', function() {
   runSectionComparison('uncertainty', '/api/evaluate/compare/core', compareCorePayload('uncertainty'), 'btn-run-section-uncertainty', renderUncertaintyResult);
 });
-byId('btn-run-section-selective').addEventListener('click', function() {
+const _btnRunSel = byId('btn-run-section-selective');
+if (_btnRunSel) _btnRunSel.addEventListener('click', function() {
   runSectionComparison('selective', '/api/evaluate/compare/core', compareCorePayload('selective'), 'btn-run-section-selective', renderSelectiveResult);
 });
-byId('btn-run-section-pathology').addEventListener('click', function() {
+const _btnRunPath = byId('btn-run-section-pathology');
+if (_btnRunPath) _btnRunPath.addEventListener('click', function() {
   runSectionComparison('pathology', '/api/evaluate/compare/core', compareCorePayload('pathology'), 'btn-run-section-pathology', renderPathologyResult);
 });
-byId('btn-run-section-shift').addEventListener('click', function() {
+const _btnRunShift = byId('btn-run-section-shift');
+if (_btnRunShift) _btnRunShift.addEventListener('click', function() {
   runSectionComparison('shift', '/api/evaluate/compare/shift', compareShiftPayload(), 'btn-run-section-shift', renderShiftResult);
 });
 byId('btn-load-saved').addEventListener('click', function() {
@@ -2504,24 +2283,37 @@ byId('btn-load-saved').addEventListener('click', function() {
       renderBundleResult(d.result || {}, d.path || name);
     })
     .catch(function(e) {
-      byId('saved-bundle-note').textContent = 'Load failed: ' + e.message;
+      const previewEl = byId('saved-bundle-preview');
+      if (previewEl) previewEl.textContent = 'Load failed: ' + e.message;
     });
 });
 byId('saved-bundle-select').addEventListener('change', function() {
   renderSavedBundlePreview(this.value);
 });
-byId('btn-load-section-performance').addEventListener('click', function() { loadSavedSection('performance'); });
-byId('btn-load-section-calibration').addEventListener('click', function() { loadSavedSection('calibration'); });
-byId('btn-load-section-uncertainty').addEventListener('click', function() { loadSavedSection('uncertainty'); });
-byId('btn-load-section-selective').addEventListener('click', function() { loadSavedSection('selective'); });
-byId('btn-load-section-pathology').addEventListener('click', function() { loadSavedSection('pathology'); });
-byId('btn-load-section-shift').addEventListener('click', function() { loadSavedSection('shift'); });
-byId('saved-section-performance-select').addEventListener('change', function() { renderSavedSectionPreview('performance', this.value); });
-byId('saved-section-calibration-select').addEventListener('change', function() { renderSavedSectionPreview('calibration', this.value); });
-byId('saved-section-uncertainty-select').addEventListener('change', function() { renderSavedSectionPreview('uncertainty', this.value); });
-byId('saved-section-selective-select').addEventListener('change', function() { renderSavedSectionPreview('selective', this.value); });
-byId('saved-section-pathology-select').addEventListener('change', function() { renderSavedSectionPreview('pathology', this.value); });
-byId('saved-section-shift-select').addEventListener('change', function() { renderSavedSectionPreview('shift', this.value); });
+const _btnLoadPerf = byId('btn-load-section-performance');
+if (_btnLoadPerf) _btnLoadPerf.addEventListener('click', function() { loadSavedSection('performance'); });
+const _btnLoadCal = byId('btn-load-section-calibration');
+if (_btnLoadCal) _btnLoadCal.addEventListener('click', function() { loadSavedSection('calibration'); });
+const _btnLoadUnc = byId('btn-load-section-uncertainty');
+if (_btnLoadUnc) _btnLoadUnc.addEventListener('click', function() { loadSavedSection('uncertainty'); });
+const _btnLoadSel = byId('btn-load-section-selective');
+if (_btnLoadSel) _btnLoadSel.addEventListener('click', function() { loadSavedSection('selective'); });
+const _btnLoadPath = byId('btn-load-section-pathology');
+if (_btnLoadPath) _btnLoadPath.addEventListener('click', function() { loadSavedSection('pathology'); });
+const _btnLoadShift = byId('btn-load-section-shift');
+if (_btnLoadShift) _btnLoadShift.addEventListener('click', function() { loadSavedSection('shift'); });
+const _selPerf = byId('saved-section-performance-select');
+if (_selPerf) _selPerf.addEventListener('change', function() { renderSavedSectionPreview('performance', this.value); });
+const _selCal = byId('saved-section-calibration-select');
+if (_selCal) _selCal.addEventListener('change', function() { renderSavedSectionPreview('calibration', this.value); });
+const _selUnc = byId('saved-section-uncertainty-select');
+if (_selUnc) _selUnc.addEventListener('change', function() { renderSavedSectionPreview('uncertainty', this.value); });
+const _selSel = byId('saved-section-selective-select');
+if (_selSel) _selSel.addEventListener('change', function() { renderSavedSectionPreview('selective', this.value); });
+const _selPath = byId('saved-section-pathology-select');
+if (_selPath) _selPath.addEventListener('change', function() { renderSavedSectionPreview('pathology', this.value); });
+const _selShift = byId('saved-section-shift-select');
+if (_selShift) _selShift.addEventListener('change', function() { renderSavedSectionPreview('shift', this.value); });
 byId('run-select').addEventListener('change', function() {
   refreshSavedBundles();
   refreshAllSavedSections();
@@ -2537,9 +2329,8 @@ byId('bundle-include-ens').addEventListener('change', function() {
   renderBundleEnsemblePicker();
   renderAllSectionEnsemblePickers();
 });
-byId('batch-method-select').addEventListener('change', function() {
-  loadBatchCorrectness(this.value);
-});
+const _batchMethodSel = byId('batch-method-select');
+if (_batchMethodSel) _batchMethodSel.addEventListener('change', function() { loadBatchCorrectness(this.value); });
 byId('detail-method-select').addEventListener('change', function() {
   renderDetailedMethodReport(this.value);
 });
@@ -2569,8 +2360,6 @@ clearFigure('error-pr-img', 'Load a bundle to see error PR');
 clearFigure('uncertainty-hist-img', 'Run a bundle to see uncertainty histogram');
 clearFigure('entropy-hist-img', 'Run a bundle to see entropy histogram');
 clearFigure('shift-detail-img', 'Load a bundle to see per-condition shift detail');
-clearCanvas('batch-correctness-chart', 'Load a bundle to see batch correctness');
-clearCanvas('batch-confidence-chart', 'Load a bundle to see batch confidence');
 refreshEnsembleCandidates();
 
 // ── Advanced Uncertainty Analysis ────────────────────────────────────────────

@@ -1,25 +1,12 @@
 {% extends "base.html" %}
 {% block title %}Home — Uncertainty in Digital Pathology{% endblock %}
 {% block content %}
-<h1>Home</h1>
-<p class="page-subtitle">Thesis overview: dataset integrity, configuration, and execution status.</p>
+<h1>Uncertainty Estimation in AI-Powered Digital Pathology</h1>
+<p class="page-subtitle">Interactive exploration tool for the thesis experiments. Browse the dataset, train models, and inspect uncertainty evaluation results.</p>
+
 
 <section class="section">
-  <div class="section-num">0. Interpretation guide</div>
-  <div class="card">
-    <div class="info-box">
-      <p><strong>Purpose</strong>: confirm setup validity before quantitative experiments.</p>
-      <ul>
-        <li><strong>Dataset summary</strong> verifies split sizes and class balance.</li>
-        <li><strong>Configuration</strong> documents model and uncertainty settings used in experiments.</li>
-        <li><strong>Pipeline status</strong> links to reproducible run and evaluation workflows.</li>
-      </ul>
-    </div>
-  </div>
-</section>
-
-<section class="section">
-  <div class="section-num">1. Dataset summary</div>
+  <div class="section-num">Dataset</div>
   <div class="card">
     <p>PCAM split statistics (normal = 0, metastasis = 1).</p>
     <table class="data-table" id="dataset-summary">
@@ -36,18 +23,15 @@
         <tr><td colspan="5">Loading…</td></tr>
       </tbody>
     </table>
-    <div class="info-box">
-      <p><strong>Why this matters</strong>: class ratio affects PR-AUC interpretation and operating-point behavior.</p>
-    </div>
     <p style="margin-top:0.75rem;margin-bottom:0;">
-      <a href="{{ url_for('setup_page') }}" class="btn btn-primary">Setup</a>
-      <a href="{{ url_for('dataset_page') }}" class="btn">Dataset browser</a>
+      <a href="{{ url_for('dataset_page') }}" class="btn btn-primary">Browse dataset</a>
+      <a href="{{ url_for('setup_page') }}" class="btn">Setup / download</a>
     </p>
   </div>
 </section>
 
 <section class="section">
-  <div class="section-num">2. Configuration</div>
+  <div class="section-num">Configuration</div>
   <div class="card">
     <p>Default configuration used by training and evaluation scripts.</p>
     <table class="data-table">
@@ -59,21 +43,22 @@
         <tr><th>Uncertainty methods</th><td>{{ config.uncertainty.methods | join(', ') if config and config.get('uncertainty') else '—' }}</td></tr>
       </tbody>
     </table>
-    <div class="info-box">
-      <p><strong>Traceability</strong>: report these values in thesis methods for reproducibility.</p>
-    </div>
+
     <p style="margin-top:0.75rem;margin-bottom:0;"><a href="{{ url_for('project') }}" class="btn">Full config & project</a></p>
   </div>
 </section>
 
 <section class="section">
-  <div class="section-num">3. Pipeline & run</div>
+  <div class="section-num">Quick start</div>
   <div class="card">
-    <p>Core workflow: environment check, data/model preparation, training, and quantitative evaluation.</p>
-    <div class="info-box">
-      <p><strong>Next recommended step</strong>: use <em>Run</em> for checkpoint generation, then <em>Results</em> for uncertainty metrics and shift robustness.</p>
-    </div>
-    <p style="margin-bottom:0;"><a href="{{ url_for('run_page') }}" class="btn btn-primary">Open run console</a></p>
+    <p>Use the links below to navigate the tool:</p>
+    <ul style="margin:0.5rem 0 0.75rem;padding-left:1.2rem;line-height:1.8;">
+      <li><strong><a href="{{ url_for('dataset_page') }}">Dataset</a></strong> — browse PCAM and NCT-CRC patches, verify labels, preview corruptions</li>
+      <li><strong><a href="{{ url_for('run_page') }}">Run</a></strong> — train a new model with live log output</li>
+      <li><strong><a href="{{ url_for('evaluate_page') }}">Results</a></strong> — load a saved evaluation bundle and explore uncertainty metrics, shift robustness, calibration, and conformal prediction</li>
+      <li><strong><a href="{{ url_for('setup_page') }}">Setup</a></strong> — download datasets and check the environment</li>
+    </ul>
+    <p style="margin-bottom:0;"><a href="{{ url_for('evaluate_page') }}" class="btn btn-primary">Go to Results</a></p>
   </div>
 </section>
 
