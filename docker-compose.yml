@@ -1,14 +1,16 @@
-# Uncertainty Estimation in Digital Pathology — Docker Compose
-# Usage: docker compose up --build   then open http://localhost:5000
-
 services:
   web:
     build: .
     ports:
       - "5000:5000"
     volumes:
-      # Persist data and cache on host so they survive container rebuild
-      - ./data:/app/data
+      # Raw dataset (download once on host, reuse across rebuilds)
+      - ./data/raw:/app/data/raw
+      # Model checkpoints (persist trained weights)
+      - ./checkpoints:/app/checkpoints
+      # Evaluation outputs (JSONs and figures written by experiment scripts)
+      - ./evaluation:/app/evaluation
+      # Hugging Face model cache (avoids re-downloading ViT on every rebuild)
       - hf_cache:/root/.cache/huggingface
     environment:
       - REPO_ROOT=/app

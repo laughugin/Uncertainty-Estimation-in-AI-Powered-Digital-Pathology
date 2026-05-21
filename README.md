@@ -91,11 +91,48 @@ Open [http://127.0.0.1:5000](http://127.0.0.1:5000). The UI lets you browse data
 
 ## Docker
 
+Docker is the easiest way to run the web interface without touching your Python environment.
+
+**Build and start:**
+
 ```bash
 docker compose up --build
 ```
 
-The UI is available at [http://localhost:5000](http://localhost:5000). The compose file mounts `./data` and the Hugging Face cache so they persist across restarts.
+Open [http://localhost:5000](http://localhost:5000).
+
+The compose file mounts four host directories into the container so nothing large is baked into the image and everything survives a rebuild:
+
+| Host path | Container path | Purpose |
+|---|---|---|
+| `./data/raw` | `/app/data/raw` | PCAM / NCT-CRC dataset files |
+| `./checkpoints` | `/app/checkpoints` | Trained model weights |
+| `./evaluation` | `/app/evaluation` | Generated JSON results and figures |
+| *(named volume)* | `/root/.cache/huggingface` | ViT weights downloaded from Hub |
+
+**Download data inside the container** (or download to `./data/raw` on the host first):
+
+```bash
+docker compose run --rm web python data/download_datasets.py --root data/raw --dataset pcam
+```
+
+**Run evaluation scripts** against existing checkpoints:
+
+```bash
+docker compose run --rm web python experiments/run_evaluation_pipeline.py
+```
+
+To run on a GPU, add a `deploy` block to `docker-compose.yml`:
+
+```yaml
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+```
 
 ---
 

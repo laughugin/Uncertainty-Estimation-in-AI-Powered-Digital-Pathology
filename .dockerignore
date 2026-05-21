@@ -1,20 +1,45 @@
-# Exclude from Docker build context for faster transfers and smaller images
-venv/
-.venv/
+# Python artifacts
 __pycache__/
 *.py[cod]
 *.pyo
+*.egg-info/
+dist/
+build/
+.eggs/
 .pytest_cache/
 .mypy_cache/
+.ruff_cache/
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+# Git
 .git/
 .gitignore
-*.md
-!README.md
-# Large data — mount at runtime or download via UI
+
+# Large data and generated outputs — mounted at runtime
 data/raw/
+checkpoints/
+evaluation/
+runs/
 *.h5
 *.h5.gz
-# Optional
-.cursor/
+*.pt
+*.ckpt
+
+# Overleaf and thesis archives
+thesis_overleaf/
+thesis_overleaf (2)/
+thesis_overleaf.zip
+thesis/
+references/
+
+# Misc
 *.log
+*.swp
+*.swo
 .DS_Store
+.env
+screenshots/
