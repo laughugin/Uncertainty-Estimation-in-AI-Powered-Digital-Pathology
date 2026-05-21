@@ -39,11 +39,6 @@ thesis_overleaf/
 thesis_overleaf (2)/
 thesis_overleaf.zip
 
-# AI tooling — not part of the project
-.cursor/
-AGENTS.md
-thesis_plain_english_guide.txt
-
 # Misc
 .DS_Store
 *.swp
