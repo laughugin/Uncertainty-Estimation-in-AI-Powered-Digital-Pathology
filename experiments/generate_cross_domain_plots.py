@@ -62,9 +62,14 @@ def load_pcam(n):
 
 
 def load_nct(n):
-    """NCT-CRC: label 1 = TUM (tumour), everything else = 0."""
+    """NCT-CRC: label 1 = TUM (tumour), everything else = 0. Balanced 50/50."""
     all_paths = list(NCT_ROOT.rglob("*.tif")) + list(NCT_ROOT.rglob("*.png"))
-    sel = random.sample(all_paths, min(n, len(all_paths)))
+    tum_paths  = [p for p in all_paths if "TUM" in str(p).upper()]
+    rest_paths = [p for p in all_paths if "TUM" not in str(p).upper()]
+    per_class = n // 2
+    sel_tum  = random.sample(tum_paths,  min(per_class, len(tum_paths)))
+    sel_rest = random.sample(rest_paths, min(per_class, len(rest_paths)))
+    sel = sel_tum + sel_rest
     imgs   = [Image.open(p).convert("RGB") for p in sel]
     labels = [1 if "TUM" in str(p).upper() else 0 for p in sel]
     return imgs, labels
